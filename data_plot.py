@@ -5,14 +5,17 @@ import matplotlib.pyplot as plt
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
+
 try:
     from optim_funct import markers_fun
+
     biorbd_module = True
 except ModuleNotFoundError:
     biorbd_module = False
 import numpy as np
 
 if biorbd_module is True:
+
     def plot_results(
         biorbd_model,
         X_est,
@@ -60,10 +63,7 @@ if biorbd_module is True:
             plt.plot(muscles_target[nbGT + i, 0:Ns:rt_ratio], "k--")
             plt.title(biorbd_model.muscleNames()[i].to_string())
         plt.legend(
-            labels=["u_est", "u_ref", "u_with_noise"],
-            bbox_to_anchor=(1.05, 1),
-            loc="upper left",
-            borderaxespad=0.0,
+            labels=["u_est", "u_ref", "u_with_noise"], bbox_to_anchor=(1.05, 1), loc="upper left", borderaxespad=0.0
         )
 
         plt.figure("Muscles_force")
@@ -121,7 +121,7 @@ def init_plot_EMG(nb_EMG, muscle_names=()):
         else:
             box.append(QtGui.QCheckBox(muscle_names[emg]))
         if emg >= 8:
-            layout.addWidget(box[emg], row=1, col=emg-8)
+            layout.addWidget(box[emg], row=1, col=emg - 8)
             layout.addWidget(remote[emg], row=emg - 8 + 2, col=4, colspan=col_span)
         else:
             layout.addWidget(box[emg], row=0, col=emg)
@@ -150,7 +150,7 @@ def update_plot_EMG(EMG, rplt, app, box):
     """
     for emg in range(EMG.shape[0]):
         if box[emg].isChecked() is True:
-            rplt[emg].plot(EMG[emg, :], clear=True, _callSync='off')
+            rplt[emg].plot(EMG[emg, :], clear=True, _callSync="off")
     app.processEvents()
 
     return app
@@ -185,7 +185,7 @@ def init_plot_q(nb_q):
         box.append(QtGui.QCheckBox(f"angle_{q}"))
         box[q].setChecked(True)
         layout.addWidget(box[q], row=0, col=q)
-        layout.addWidget(remote[q], row=row_count+1, col=col_count)
+        layout.addWidget(remote[q], row=row_count + 1, col=col_count)
         rplt.append(remote[q].pg.PlotItem())
         rplt[q]._setProxyOptions(deferGetattr=True)  ## speeds up access to rplt.plot
         remote[q].setCentralItem(rplt[q])
@@ -198,6 +198,7 @@ def init_plot_q(nb_q):
             row_count += 1
 
     return rplt, layout, app_q, box
+
 
 def init_plot_force(nb_mus):
     """
@@ -259,12 +260,12 @@ def init_plot_force(nb_mus):
     app = pg.mkQApp()
     layout = pg.plot()
     layout.resize(800, 800)
-    rplt = pg.BarGraphItem(x=range(nb_mus), height=np.zeros((nb_mus)), width=0.3, brush='r')
+    rplt = pg.BarGraphItem(x=range(nb_mus), height=np.zeros((nb_mus)), width=0.3, brush="r")
     layout.addItem(rplt)
     return rplt, layout, app
 
 
-def update_plot_force(force_est, rplt, app, ratio):#, box):
+def update_plot_force(force_est, rplt, app, ratio):  # , box):
     """
             update force plot
             ----------
@@ -309,5 +310,5 @@ def update_plot_q(q_est, rplt, app, box):
     """
     for q in range(q_est.shape[0]):
         if box[q].isChecked() is True:
-            rplt[q].plot(q_est[q, :], clear=True, _callSync='off')
+            rplt[q].plot(q_est[q, :], clear=True, _callSync="off")
     app.processEvents()

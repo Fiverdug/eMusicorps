@@ -4,8 +4,8 @@ import scipy.io as sio
 # Set program variables
 read_freq = 74
 n_electrode = 10
-show_data = ['raw_emg']  # can be ["emg"] to show process EMG
-device_host = '192.168.1.211'  # IP address of computer which run trigno device
+show_data = ["raw_emg"]  # can be ["emg"] to show process EMG
+device_host = "192.168.1.211"  # IP address of computer which run trigno device
 
 # load MVC data from previous trials.
 file_name = "MVC_xxxx.mat"
@@ -19,12 +19,13 @@ output_dir = "data_stream_01_08_2021"
 
 # Run streaming data
 muscles_idx = (0, n_electrode - 1)
-run(muscles_idx,
+run(
+    muscles_idx,
     output_file=output_file,
     output_dir=output_dir,
     read_freq=read_freq,
     MVC_list=list_mvc,
     show_data=show_data,
     print_data=True,
-    test_with_connection=True
-    )
+    test_with_connection=True,
+)

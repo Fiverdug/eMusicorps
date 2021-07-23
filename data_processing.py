@@ -2,8 +2,10 @@ import numpy as np
 from scipy.signal import butter, lfilter, filtfilt, convolve
 import pickle
 from time import time
+
 try:
     from pyomeca import Analogs
+
     pyomec_module = True
 except ModuleNotFoundError:
     pyomec_module = False
@@ -18,8 +20,9 @@ def process_EMG(data, frequency, bpf_lcut=10, bpf_hcut=425, lpf_lcut=5, order=4,
         emg = Analogs(data)
         EMG_processed = (
             emg.meca.band_pass(order=order, cutoff=[bpf_lcut, bpf_hcut], freq=frequency)
-                .meca.abs()
-                .meca.low_pass(order=order, cutoff=lpf_lcut, freq=frequency))
+            .meca.abs()
+            .meca.low_pass(order=order, cutoff=lpf_lcut, freq=frequency)
+        )
         EMG_processed = EMG_processed.values
 
     else:
@@ -55,14 +58,14 @@ def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
     low = lowcut / nyq
     high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
+    b, a = butter(order, [low, high], btype="band")
     return b, a
 
 
 def butter_lowpass(lowcut, fs, order=4):
     nyq = 0.5 * fs
     low = lowcut / nyq
-    b, a = butter(order, [low], btype='low')
+    b, a = butter(order, [low], btype="low")
     return b, a
 
 
@@ -73,28 +76,18 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 
 
 def butter_lowpass_filter(data, lowcut, fs, order=4):
-    b, a = butter_lowpass(lowcut,  fs, order=order)
+    b, a = butter_lowpass(lowcut, fs, order=order)
     y = filtfilt(b, a, data)
     return y
 
 
 def moving_average(data, w, empty_ma):
     for i in range(data.shape[0]):
-        empty_ma[i, :] = convolve(data[i, :], w, mode='same', method='fft')
+        empty_ma[i, :] = convolve(data[i, :], w, mode="same", method="fft")
     return empty_ma
 
 
-def process_EMG_RT(
-        raw_EMG,
-        EMG_proc,
-        EMG_tmp,
-        MVC_list,
-        ma_win,
-        EMG_win=2000,
-        EMG_freq=2000,
-        norm_EMG=True,
-        lpf=False,
-):
+def process_EMG_RT(raw_EMG, EMG_proc, EMG_tmp, MVC_list, ma_win, EMG_win=2000, EMG_freq=2000, norm_EMG=True, lpf=False):
     if ma_win > EMG_win:
         raise RuntimeError(f"Moving average windows ({ma_win}) higher than EMG windows ({EMG_win}).")
     EMG_sample = EMG_tmp.shape[1]
@@ -114,11 +107,11 @@ def process_EMG_RT(
         raw_EMG = EMG_tmp
 
     elif raw_EMG.shape[1] < EMG_win:
-        EMG_proc = np.zeros((EMG_tmp.shape[0], int(raw_EMG.shape[1]/EMG_sample)))
+        EMG_proc = np.zeros((EMG_tmp.shape[0], int(raw_EMG.shape[1] / EMG_sample)))
         raw_EMG = np.append(raw_EMG, EMG_tmp, axis=1)
 
     else:
-        raw_EMG = np.append(raw_EMG[:, -EMG_win + EMG_sample:], EMG_tmp, axis=1)
+        raw_EMG = np.append(raw_EMG[:, -EMG_win + EMG_sample :], EMG_tmp, axis=1)
         EMG_proc_tmp = abs(butter_bandpass_filter(raw_EMG, 10, 425, EMG_freq))
 
         if lpf is True:
@@ -128,18 +121,18 @@ def process_EMG_RT(
 
         else:
             average = np.mean(EMG_proc_tmp[:, -ma_win:], axis=1).reshape(-1, 1)
-            EMG_proc = np.append(EMG_proc[:, 1:], average/quot, axis=1)
+            EMG_proc = np.append(EMG_proc[:, 1:], average / quot, axis=1)
     return raw_EMG, EMG_proc
 
 
 def add_data_to_pickle(data_dict, data_path):
-    with open(data_path, 'ab') as outf:
+    with open(data_path, "ab") as outf:
         pickle.dump(data_dict, outf, pickle.HIGHEST_PROTOCOL)
 
 
 def read_data(filename):
     data = {}
-    with open(filename, 'rb') as inf:
+    with open(filename, "rb") as inf:
         count = 0
         while True:
             try:
@@ -152,7 +145,7 @@ def read_data(filename):
                             data[key] = data_tmp[key]
                     else:
                         if isinstance(data_tmp[key], (int, float, str)) is True:
-                            if key == 'time' or key == 'Time':
+                            if key == "time" or key == "Time":
                                 data[key].append(data_tmp[key])
                         elif len(data_tmp[key].shape) == 2:
                             data[key] = np.append(data[key], data_tmp[key], axis=1)

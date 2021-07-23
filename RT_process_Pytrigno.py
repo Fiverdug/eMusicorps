@@ -7,28 +7,29 @@ import numpy as np
 import scipy.io as sio
 
 
-def run(muscles_range,
-        get_EMG=True,
-        get_accel=True,
-        get_gyro=True,
-        read_freq=100,
-        MVC_list=(),
-        host_ip=None,
-        EMG_freq=2000,
-        IM_freq=148.1,
-        EMG_windows=2000,
-        IM_windows=100,
-        accept_delay=0.005,
-        save_data=True,
-        output_dir=None,
-        output_file=None,
-        show_data=None,
-        print_data=False,
-        server='pytrigno',
-        norm_EMG=True,
-        muscle_names=(),
-        test_with_connection=True,
-        ):
+def run(
+    muscles_range,
+    get_EMG=True,
+    get_accel=True,
+    get_gyro=True,
+    read_freq=100,
+    MVC_list=(),
+    host_ip=None,
+    EMG_freq=2000,
+    IM_freq=148.1,
+    EMG_windows=2000,
+    IM_windows=100,
+    accept_delay=0.005,
+    save_data=True,
+    output_dir=None,
+    output_file=None,
+    show_data=None,
+    print_data=False,
+    server="pytrigno",
+    norm_EMG=True,
+    muscle_names=(),
+    test_with_connection=True,
+):
     """
         Run streaming of delsys sensor data with real time processing and plotting.
         ----------
@@ -79,45 +80,45 @@ def run(muscles_range,
         print("[WARNING] Please note that you are in 'no connection' mode for debug.")
 
     if get_EMG is False and get_accel is False and get_gyro is False:
-        raise RuntimeError('Please define at least one data to read (emg/gyro/accel).')
+        raise RuntimeError("Please define at least one data to read (emg/gyro/accel).")
     if get_gyro is True:
         print("[WARNING] Please note that only avanti sensor have gyroscope data available.")
 
     if show_data:
         for data in show_data:
-            if data == 'accelerometer' or data == 'accel':
+            if data == "accelerometer" or data == "accel":
                 raise RuntimeError("Plot accelerometer data not implemented yet.")
-            elif data == 'gyroscope' or data == 'gyro':
+            elif data == "gyroscope" or data == "gyro":
                 raise RuntimeError("Plot gyroscope data not implemented yet.")
 
-    if server == 'vicon' and get_accel is True or server == 'vicon' and get_gyro is True:
-        raise RuntimeError('Read IM data with vicon not implemented yet')
+    if server == "vicon" and get_accel is True or server == "vicon" and get_gyro is True:
+        raise RuntimeError("Read IM data with vicon not implemented yet")
 
     current_time = strftime("%Y%m%d-%H%M")
     output_file = output_file if output_file else f"trigno_streaming_{current_time}"
 
     if output_dir is None:
-        output_dir = 'live_data'
+        output_dir = "live_data"
     if os.path.isdir(output_dir) is not True:
         os.mkdir(output_dir)
     data_path = f"{output_dir}/{output_file}"
 
     if get_accel is not True and get_EMG is not True and get_gyro is not True:
         raise RuntimeError("Please define at least one data to read.")
-        
+
     dev_EMG = []
     dev_IM = []
     if isinstance(muscles_range, tuple) is not True:
         raise RuntimeError("muscles_range must be a tuple.")
     n_muscles = muscles_range[1] - muscles_range[0] + 1
 
-    EMG_sample = int(EMG_freq/read_freq)
-    IM_sample = int(IM_freq/read_freq)
+    EMG_sample = int(EMG_freq / read_freq)
+    IM_sample = int(IM_freq / read_freq)
     IM_range = (muscles_range[0], muscles_range[0] + (n_muscles * 9))
 
-    host_ip = 'localhost' if None else host_ip
+    host_ip = "localhost" if None else host_ip
     if test_with_connection is True:
-        if server == 'pytrigno':
+        if server == "pytrigno":
             if get_EMG is True:
                 dev_EMG = pytrigno.TrignoEMG(channel_range=muscles_range, samples_per_read=EMG_sample, host=host_ip)
             if get_accel is True:
@@ -141,13 +142,13 @@ def run(muscles_range,
     print("Streaming data.....")
     ma_win = 200
     if test_with_connection is not True:
-        EMG_exp = sio.loadmat("EMG_test.mat")['EMG'][:, :1500]
+        EMG_exp = sio.loadmat("EMG_test.mat")["EMG"][:, :1500]
 
     c = 0
     initial_time = time()
     while True:
         if test_with_connection:
-            if server == 'pytrigno':
+            if server == "pytrigno":
                 if get_EMG is True:
                     dev_EMG.reset()
                     dev_EMG.start()
@@ -163,7 +164,7 @@ def run(muscles_range,
         else:
             if get_EMG is True:
                 if c < EMG_exp.shape[1]:
-                    data_EMG_tmp = EMG_exp[:n_muscles, c:c + EMG_sample]
+                    data_EMG_tmp = EMG_exp[:n_muscles, c : c + EMG_sample]
                     c += EMG_sample
                 else:
                     c = 0
@@ -181,30 +182,32 @@ def run(muscles_range,
                 EMG_win=EMG_windows,
                 EMG_freq=EMG_freq,
                 norm_EMG=norm_EMG,
-                lpf=False
+                lpf=False,
             )
 
             if show_data:
                 for data in show_data:
                     if data == "raw_emg":
                         if raw_EMG.shape[1] < EMG_windows:
-                            EMG_to_plot = np.append(np.zeros((raw_EMG.shape[0], EMG_windows - raw_EMG.shape[1])), raw_EMG, axis=1)
+                            EMG_to_plot = np.append(
+                                np.zeros((raw_EMG.shape[0], EMG_windows - raw_EMG.shape[1])), raw_EMG, axis=1
+                            )
                         else:
                             EMG_to_plot = raw_EMG
-                    elif data == 'emg':
+                    elif data == "emg":
                         if EMG_proc.shape[1] < read_freq:
                             EMG_to_plot = np.append(
-                        np.zeros((EMG_proc.shape[0], read_freq - EMG_proc.shape[1])), EMG_proc, axis=1
-                    )
+                                np.zeros((EMG_proc.shape[0], read_freq - EMG_proc.shape[1])), EMG_proc, axis=1
+                            )
                         else:
                             EMG_to_plot = EMG_proc
 
             # print EMG data
             if print_data is True:
-                    print(f"EMG processed data :\n {EMG_proc[:, -1:]}")
+                print(f"EMG processed data :\n {EMG_proc[:, -1:]}")
 
         if get_accel is True or get_gyro is True:
-            IM = np.concatenate((IM[:, :, - IM_windows + IM_sample:], data_IM_tmp), axis=2)
+            IM = np.concatenate((IM[:, :, -IM_windows + IM_sample :], data_IM_tmp), axis=2)
             accel = IM[:, :3, -IM_windows:]
             gyro = IM[:, 3:6, -IM_windows:]
             accel_proc = process_accel(accel, IM_freq)  # return raw data for now
@@ -217,7 +220,12 @@ def run(muscles_range,
 
         # Save data
         if save_data is True:
-            data_to_save = {"Time": time() - initial_time, "EMG_freq": EMG_freq, "IM_freq": IM_freq, "read_freq": read_freq}
+            data_to_save = {
+                "Time": time() - initial_time,
+                "EMG_freq": EMG_freq,
+                "IM_freq": IM_freq,
+                "read_freq": read_freq,
+            }
             if get_EMG is True:
                 data_to_save["EMG_proc"] = EMG_proc[:, -1:]
                 data_to_save["raw_EMG"] = data_EMG_tmp
@@ -231,7 +239,7 @@ def run(muscles_range,
         # Plot data real time
         if show_data:
             for data in show_data:
-                if data == 'raw_emg' or data == 'emg':
+                if data == "raw_emg" or data == "emg":
                     update_plot_EMG(EMG_to_plot, p, app, box)
 
                 else:
@@ -240,11 +248,13 @@ def run(muscles_range,
                     )
 
         t = time() - tic
-        time_to_sleep = 1/read_freq - t
+        time_to_sleep = 1 / read_freq - t
         if time_to_sleep > 0:
             sleep(time_to_sleep)
         elif float(abs(time_to_sleep)) < float(accept_delay):
             pass
         else:
-            print(f"[Warning] Processing need to much time and delay ({abs(time_to_sleep)}) exceeds "
-                  f"the threshold ({accept_delay}). Try to reduce the read frequency or EMG frequency.")
+            print(
+                f"[Warning] Processing need to much time and delay ({abs(time_to_sleep)}) exceeds "
+                f"the threshold ({accept_delay}). Try to reduce the read frequency or EMG frequency."
+            )
