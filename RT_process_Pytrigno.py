@@ -97,10 +97,14 @@ def run(
     current_time = strftime("%Y%m%d-%H%M")
     output_file = output_file if output_file else f"trigno_streaming_{current_time}"
 
-    if output_dir is None:
-        output_dir = "live_data"
+    output_dir = output_dir if output_dir else "live_data"
+
     if os.path.isdir(output_dir) is not True:
         os.mkdir(output_dir)
+
+    if os.path.isfile(f"{output_dir}/{output_file}"):
+        os.remove(f"{output_dir}/{output_file}")
+
     data_path = f"{output_dir}/{output_file}"
 
     if get_accel is not True and get_EMG is not True and get_gyro is not True:
