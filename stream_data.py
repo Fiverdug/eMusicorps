@@ -24,6 +24,7 @@ run(
     output_file=output_file,
     output_dir=output_dir,
     read_freq=read_freq,
+    host_ip=device_host,
     MVC_list=list_mvc,
     show_data=show_data,
     print_data=True,
