@@ -26,7 +26,9 @@ run(
     read_freq=read_freq,
     host_ip=device_host,
     MVC_list=list_mvc,
-    show_data=show_data,
+    #show_data=show_data,
     print_data=True,
-    test_with_connection=True,
+    test_with_connection=False,
+    OSC_stream=True,
+    OSC_ip="127.0.0.1",
 )
