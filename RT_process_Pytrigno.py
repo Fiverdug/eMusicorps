@@ -240,7 +240,7 @@ def run(
             if OSC_stream is True: 
                 if get_accel is True:
                     i=0
-                    for x in accel_proc[:, :, -IM_sample:]:
+                    for x in np.mean(accel_proc[:, :, -IM_sample:],axis=2):
                         j=0
                         for y in x:
                             OSC_client.send_message("/accel/"+str(i)+"/"+str(j),  y)
@@ -249,7 +249,7 @@ def run(
                     pass
                 if get_gyro is True:
                     i=0
-                    for x in gyro_proc[:, :, -IM_sample:]:
+                    for x in np.mean(gyro_proc[:, :, -IM_sample:],axis=2):
                         j=0
                         for y in x:
                             OSC_client.send_message("/gyro/"+str(i)+"/"+str(j),  y)
