@@ -26,7 +26,7 @@ def run(
     show_data=None,
     print_data=False,
     server="pytrigno",
-    norm_EMG=True,
+    norm_EMG=False,
     muscle_names=(),
     test_with_connection=True,
 ):
@@ -76,6 +76,8 @@ def run(
         Returns
             -------
      """
+    if len(MVC_list) != 0:
+        norm_EMG = True
     if test_with_connection is not True:
         print("[WARNING] Please note that you are in 'no connection' mode for debug.")
 
@@ -125,8 +127,10 @@ def run(
         if server == "pytrigno":
             if get_EMG is True:
                 dev_EMG = pytrigno.TrignoEMG(channel_range=muscles_range, samples_per_read=EMG_sample, host=host_ip)
+                dev_EMG.start()
             if get_accel is True:
                 dev_IM = pytrigno.TrignoIM(channel_range=IM_range, samples_per_read=IM_sample, host=host_ip)
+                dev_IM.start()
 
     IM = np.zeros((n_muscles, 9, IM_sample))
     data_EMG_tmp = []
@@ -147,20 +151,15 @@ def run(
     ma_win = 200
     if test_with_connection is not True:
         EMG_exp = sio.loadmat("EMG_test.mat")["EMG"][:, :1500]
-
     c = 0
     initial_time = time()
     while True:
         if test_with_connection:
             if server == "pytrigno":
                 if get_EMG is True:
-                    dev_EMG.reset()
-                    dev_EMG.start()
                     data_EMG_tmp = dev_EMG.read()
 
-                if get_accel is True:
-                    dev_IM.reset()
-                    dev_IM.start()
+                if get_accel is True or get_gyro is True:
                     data_IM_tmp = dev_IM.read()
                     data_IM_tmp = data_IM_tmp.reshape(n_muscles, 9, IM_sample)
             else:
