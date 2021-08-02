@@ -3,7 +3,7 @@ import scipy.io as sio
 
 # Set program variables
 read_freq = 74
-n_electrode = 10
+n_electrode = 14
 show_data = ["raw_emg"]  # can be ["emg"] to show process EMG
 device_host = "192.168.1.211"  # IP address of computer which run trigno device
 
@@ -26,7 +26,9 @@ run(
     read_freq=read_freq,
     host_ip=device_host,
     MVC_list=list_mvc,
-    show_data=show_data,
+    #show_data=show_data,
     print_data=True,
-    test_with_connection=True,
+    test_with_connection=False,
+    OSC_stream=True,
+    OSC_ip="127.0.0.1",
 )

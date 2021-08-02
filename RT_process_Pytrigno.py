@@ -6,6 +6,8 @@ import os
 import numpy as np
 import scipy.io as sio
 
+from pythonosc.udp_client import SimpleUDPClient
+
 
 def run(
     muscles_range,
@@ -29,6 +31,9 @@ def run(
     norm_EMG=False,
     muscle_names=(),
     test_with_connection=True,
+    OSC_stream=False,
+    OSC_ip="127.0.0.1",
+    OSC_port=51337,
 ):
     """
         Run streaming of delsys sensor data with real time processing and plotting.
@@ -73,6 +78,12 @@ def run(
             True for normalize EMG in real time. Note that you need a MVC list.
         muscle_names: list
             list of muscle names. Length must be the same than the number of delsys sensors.
+        OSC_stream: bool
+            Stream OSC (open sound control) value to destination
+        OSC_port: int
+            OSC output port (must be over 1024 and under 65000), default : 51337 
+        OSC_ip: str
+            OSC output ip address, default : 127.0.0.1        
         Returns
             -------
      """
@@ -153,6 +164,9 @@ def run(
         EMG_exp = sio.loadmat("EMG_test.mat")["EMG"][:, :1500]
     c = 0
     initial_time = time()
+    if OSC_stream is True:
+        OSC_client = SimpleUDPClient(OSC_ip, OSC_port)
+        print("Streaming OSC activated") 
     while True:
         if test_with_connection:
             if server == "pytrigno":
@@ -208,7 +222,9 @@ def run(
             # print EMG data
             if print_data is True:
                 print(f"EMG processed data :\n {EMG_proc[:, -1:]}")
-
+            if OSC_stream is True:
+                OSC_client.send_message("/EMG/processed/", np.mean(EMG_proc[:, -EMG_sample:],axis=1))
+        
         if get_accel is True or get_gyro is True:
             IM = np.concatenate((IM[:, :, -IM_windows + IM_sample :], data_IM_tmp), axis=2)
             accel = IM[:, :3, -IM_windows:]
@@ -220,7 +236,25 @@ def run(
             if print_data is True:
                 print(f"Accel data :\n {accel_proc[:, :, -IM_sample:]}")
                 print(f"Gyro data :\n {gyro_proc[:, :, -IM_sample:]}")
-
+            if OSC_stream is True: 
+                if get_accel is True:
+                    i=0
+                    for x in np.mean(accel_proc[:, :, -IM_sample:],axis=2):
+                        j=0
+                        for y in x:
+                            OSC_client.send_message("/accel/"+str(i)+"/"+str(j),  y)
+                            j=j+1
+                        i=i+1
+                    pass
+                if get_gyro is True:
+                    i=0
+                    for x in np.mean(gyro_proc[:, :, -IM_sample:],axis=2):
+                        j=0
+                        for y in x:
+                            OSC_client.send_message("/gyro/"+str(i)+"/"+str(j),  y)
+                            j=j+1
+                        i=i+1
+                    pass
         # Save data
         if save_data is True:
             data_to_save = {
