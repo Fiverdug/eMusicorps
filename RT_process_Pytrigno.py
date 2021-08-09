@@ -1,6 +1,6 @@
 import pytrigno
 from data_plot import init_plot_EMG, update_plot_EMG
-from data_processing import process_EMG_RT, process_accel, process_gyro, add_data_to_pickle
+from data_processing import process_EMG_RT, process_IMU, add_data_to_pickle
 from time import sleep, time, strftime
 import os
 import numpy as np
@@ -123,6 +123,7 @@ def run(
     if get_accel is not True and get_EMG is not True and get_gyro is not True:
         raise RuntimeError("Please define at least one data to read.")
 
+    OSC_client = []
     dev_EMG = []
     dev_IM = []
     if isinstance(muscles_range, tuple) is not True:
@@ -143,12 +144,9 @@ def run(
                 dev_IM = pytrigno.TrignoIM(channel_range=IM_range, samples_per_read=IM_sample, host=host_ip)
                 dev_IM.start()
 
-    IM = np.zeros((n_muscles, 9, IM_sample))
     data_EMG_tmp = []
-    data_IM_tmp = []
-    raw_EMG = []
-    EMG_proc = []
-    EMG_to_plot = []
+    data_IM_tmp, accel_proc, raw_accel, gyro_proc, raw_gyro = [], [], [], [], []
+    raw_EMG, EMG_proc, EMG_to_plot = [], [], []
 
     if show_data:
         p, win_EMG, app, box = init_plot_EMG(n_muscles, muscle_names)
@@ -161,12 +159,15 @@ def run(
     print("Streaming data.....")
     ma_win = 200
     if test_with_connection is not True:
+        data = sio.loadmat("test_IMU.mat")
+        IM_exp = np.concatenate((data["raw_accel"][:, :, :6000], data["raw_gyro"][:, :, :6000]), axis=1)
         EMG_exp = sio.loadmat("EMG_test.mat")["EMG"][:, :1500]
     c = 0
+    d = 0
     initial_time = time()
     if OSC_stream is True:
         OSC_client = SimpleUDPClient(OSC_ip, OSC_port)
-        print("Streaming OSC activated") 
+        print("Streaming OSC activated")
     while True:
         if test_with_connection:
             if server == "pytrigno":
@@ -186,7 +187,12 @@ def run(
                 else:
                     c = 0
             if get_accel is True:
-                data_IM_tmp = np.random.random((n_muscles, 9, IM_sample))
+                if d < IM_exp.shape[2]:
+                    data_IM_tmp = IM_exp[:n_muscles, :, d : d + IM_sample]
+                    d += IM_sample
+                else:
+                    d = 0
+                # data_IM_tmp = np.random.random((n_muscles, 9, IM_sample))
         tic = time()
 
         if get_EMG is True:
@@ -223,38 +229,39 @@ def run(
             if print_data is True:
                 print(f"EMG processed data :\n {EMG_proc[:, -1:]}")
             if OSC_stream is True:
-                OSC_client.send_message("/EMG/processed/", np.mean(EMG_proc[:, -EMG_sample:],axis=1))
-        
+                OSC_client.send_message("/EMG/processed/", np.mean(EMG_proc[:, -EMG_sample:], axis=1))
+
         if get_accel is True or get_gyro is True:
-            IM = np.concatenate((IM[:, :, -IM_windows + IM_sample :], data_IM_tmp), axis=2)
-            accel = IM[:, :3, -IM_windows:]
-            gyro = IM[:, 3:6, -IM_windows:]
-            accel_proc = process_accel(accel, IM_freq)  # return raw data for now
-            gyro_proc = process_gyro(gyro, IM_freq)  # return raw data for now
+            accel_tmp = data_IM_tmp[:, :3, :]
+            gyro_tmp = data_IM_tmp[:, 3:6, :]
+            raw_accel, accel_proc = process_IMU(accel_proc, raw_accel, accel_tmp, IM_windows, IM_sample, ma_win=30)
+            raw_gyro, gyro_proc = process_IMU(gyro_proc, raw_gyro, gyro_tmp, IM_windows, IM_sample, ma_win=30)
 
             # Print IM data
             if print_data is True:
                 print(f"Accel data :\n {accel_proc[:, :, -IM_sample:]}")
                 print(f"Gyro data :\n {gyro_proc[:, :, -IM_sample:]}")
-            if OSC_stream is True: 
+
+            if OSC_stream is True:
                 if get_accel is True:
-                    i=0
-                    for x in np.mean(accel_proc[:, :, -IM_sample:],axis=2):
-                        j=0
+                    i = 0
+                    for x in np.mean(accel_proc[:, :, -IM_sample:], axis=2):
+                        j = 0
                         for y in x:
-                            OSC_client.send_message("/accel/"+str(i)+"/"+str(j),  y)
-                            j=j+1
-                        i=i+1
+                            OSC_client.send_message("/accel/" + str(i) + "/" + str(j), y)
+                            j += 1
+                        i += 1
                     pass
                 if get_gyro is True:
-                    i=0
-                    for x in np.mean(gyro_proc[:, :, -IM_sample:],axis=2):
-                        j=0
+                    i = 0
+                    for x in np.mean(gyro_proc[:, :, -IM_sample:], axis=2):
+                        j = 0
                         for y in x:
-                            OSC_client.send_message("/gyro/"+str(i)+"/"+str(j),  y)
-                            j=j+1
-                        i=i+1
+                            OSC_client.send_message("/gyro/" + str(i) + "/" + str(j), y)
+                            j += 1
+                        i += 1
                     pass
+
         # Save data
         if save_data is True:
             data_to_save = {
@@ -266,9 +273,11 @@ def run(
             if get_EMG is True:
                 data_to_save["EMG_proc"] = EMG_proc[:, -1:]
                 data_to_save["raw_EMG"] = data_EMG_tmp
-            if get_gyro is True:
-                data_to_save["raw_accel"] = data_IM_tmp[:, 0:3, :]
             if get_accel is True:
+                data_to_save["accel_proc"] = accel_proc[:, :, -1:]
+                data_to_save["raw_accel"] = data_IM_tmp[:, 0:3, :]
+            if get_gyro is True:
+                data_to_save["gyro_proc"] = gyro_proc[:, :, -1:]
                 data_to_save["raw_gyro"] = data_IM_tmp[:, 3:6, :]
 
             add_data_to_pickle(data_to_save, data_path)
