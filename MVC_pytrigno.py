@@ -98,6 +98,7 @@ class ComputeMvc:
                 self.trigno_dev = pytrigno.TrignoEMG(
                     channel_range=self.range_muscles, samples_per_read=self.sample, host=self.device_host
                 )
+                self.trigno_dev.start()
                 print(f"Streaming data is starting on {self.n_muscles} muscles")
 
             elif stream_mode == "server_data":
@@ -244,8 +245,8 @@ class ComputeMvc:
                         )
                     if self.test_w_connection is True:
                         if self.stream_mode == "pytrigno":
-                            self.trigno_dev.reset()
-                            self.trigno_dev.start()
+                            # self.trigno_dev.reset()
+                            # self.trigno_dev.start()
                             data_tmp = self.trigno_dev.read()
                             tic = time()
                     else:
