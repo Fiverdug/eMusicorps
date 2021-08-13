@@ -234,18 +234,18 @@ def run(
         if get_accel is True or get_gyro is True:
             accel_tmp = data_IM_tmp[:, :3, :]
             gyro_tmp = data_IM_tmp[:, 3:6, :]
-            raw_accel, accel_proc = process_IMU(accel_proc, raw_accel, accel_tmp, IM_windows, IM_sample, ma_win=30)
+            raw_accel, accel_proc = process_IMU(accel_proc, raw_accel, accel_tmp, IM_windows, IM_sample, ma_win=30, accel=True)
             raw_gyro, gyro_proc = process_IMU(gyro_proc, raw_gyro, gyro_tmp, IM_windows, IM_sample, ma_win=30)
 
             # Print IM data
             if print_data is True:
-                print(f"Accel data :\n {accel_proc[:, :, -IM_sample:]}")
-                print(f"Gyro data :\n {gyro_proc[:, :, -IM_sample:]}")
+                print(f"Accel data :\n {accel_proc[:, -IM_sample:]}")
+                print(f"Gyro data :\n {gyro_proc[:, -IM_sample:]}")
 
             if OSC_stream is True:
                 if get_accel is True:
                     i = 0
-                    for x in np.mean(accel_proc[:, :, -IM_sample:], axis=2):
+                    for x in np.mean(accel_proc[:, -IM_sample:], axis=2):
                         j = 0
                         for y in x:
                             OSC_client.send_message("/accel/" + str(i) + "/" + str(j), y)
@@ -254,7 +254,7 @@ def run(
                     pass
                 if get_gyro is True:
                     i = 0
-                    for x in np.mean(gyro_proc[:, :, -IM_sample:], axis=2):
+                    for x in np.mean(gyro_proc[:, -IM_sample:], axis=2):
                         j = 0
                         for y in x:
                             OSC_client.send_message("/gyro/" + str(i) + "/" + str(j), y)
@@ -274,10 +274,10 @@ def run(
                 data_to_save["EMG_proc"] = EMG_proc[:, -1:]
                 data_to_save["raw_EMG"] = data_EMG_tmp
             if get_accel is True:
-                data_to_save["accel_proc"] = accel_proc[:, :, -1:]
+                data_to_save["accel_proc"] = accel_proc[:, -1:]
                 data_to_save["raw_accel"] = data_IM_tmp[:, 0:3, :]
             if get_gyro is True:
-                data_to_save["gyro_proc"] = gyro_proc[:, :, -1:]
+                data_to_save["gyro_proc"] = gyro_proc[:, -1:]
                 data_to_save["raw_gyro"] = data_IM_tmp[:, 3:6, :]
 
             add_data_to_pickle(data_to_save, data_path)

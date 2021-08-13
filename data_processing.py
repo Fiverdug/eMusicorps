@@ -46,20 +46,27 @@ def normalize_EMG(EMG, MVC_list):
 
 
 # TODO: add framework to accelerometer signal processing
-def process_IMU(IM_proc, raw_IM, IM_tmp, IM_win, IM_sample, ma_win):
+def process_IMU(IM_proc, raw_IM, IM_tmp, IM_win, IM_sample, ma_win, accel=False):
+
     if len(raw_IM) == 0:
-        IM_proc = np.zeros((IM_tmp.shape[0], 3, 1))
+        IM_proc = np.zeros((IM_tmp.shape[0], 1))
         raw_IM = IM_tmp
 
     elif raw_IM.shape[2] < ma_win:
-        IM_proc = np.zeros((IM_tmp.shape[0], 3, int(raw_IM.shape[2] / IM_sample)))
+        IM_proc = np.zeros((IM_tmp.shape[0], int(raw_IM.shape[2] / IM_sample)))
         raw_IM = np.append(raw_IM[:, :, -IM_win + IM_sample :], IM_tmp, axis=2)
 
     else:
         raw_IM = np.append(raw_IM[:, :, -IM_win + IM_sample :], IM_tmp, axis=2)
         IM_proc_tmp = raw_IM
         average = np.mean(IM_proc_tmp[:, :, -ma_win:], axis=2).reshape(-1, 3, 1)
-        IM_proc = np.append(IM_proc[:, :, 1:], average, axis=2)
+        if accel:
+            average = abs(np.linalg.norm(average, axis=1)-1)
+        else:
+            average = np.linalg.norm(average, axis=1)
+        IM_proc = np.append(IM_proc[:, 1:], average, axis=1)
+
+
     return raw_IM, IM_proc
 
 
