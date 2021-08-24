@@ -1,8 +1,8 @@
 from time import sleep, strftime, time
 import os
-from data_processing import process_EMG
+from data_processing import process_emg
 import numpy as np
-from data_plot import init_plot_EMG, update_plot_EMG
+from data_plot import init_plot_emg, update_plot_emg
 import matplotlib.pyplot as plt
 import scipy.io as sio
 from math import ceil
@@ -55,7 +55,7 @@ class ComputeMvc:
         device_host=None,
         frequency=2000,
         acquisition_rate=100,
-        MVC_windows=2000,
+        mvc_windows=2000,
         server_port=None,
         server_ip=None,
         test_with_connection=True,
@@ -76,7 +76,7 @@ class ComputeMvc:
         self.server_ip = server_ip
         self.acquisition_rate = acquisition_rate
         self.n_muscles = range_muscles[1] - range_muscles[0] + 1
-        self.MVC_windows = MVC_windows
+        self.mvc_windows = mvc_windows
         self.try_name = ""
         self.try_list = []
         self.stream_mode = stream_mode
@@ -110,9 +110,9 @@ class ComputeMvc:
                     f" Stream mode can be 'pytrigno', 'viconsdk' or 'server_data."
                 )
         else:
-            self.EMG_exp = sio.loadmat("EMG_test.mat")["EMG"][:, :1500]
+            self.emg_exp = sio.loadmat("EMG_test.mat")["EMG"][:, :1500]
 
-    def _process_MVC(self, data, save_final_data=False, save_tmp=False, return_list=False):
+    def _process_mvc(self, data, save_final_data=False, save_tmp=False, return_list=False):
         """
                 Process MVC signal
                 ----------
@@ -126,14 +126,14 @@ class ComputeMvc:
                     True to return the list of MVC, else it return MVC processed.
                 Returns
                 -------
-                list of MVC or MVC processed
+                list of mvc or MVC processed
                 """
         mvc_trials = []
         mvc_processed = []
-        windows = self.MVC_windows
+        windows = self.mvc_windows
         mvc_list_max = np.ndarray((len(self.muscle_names), windows))
         if save_final_data is not True and return_list is not True:
-            mvc_processed = process_EMG(data, self.frequency, MA_win=200, pyomec=False, MA=True)
+            mvc_processed = process_emg(data, self.frequency, MA_win=200, pyomec=False, MA=True)
         else:
             mvc_trials = data
 
@@ -233,7 +233,7 @@ class ComputeMvc:
             nb_frame = 0
             c = 0
             if show_data is True:
-                p, win_EMG, app, box = init_plot_EMG(self.n_muscles, self.muscle_names)
+                p, win_emg, app, box = init_plot_emg(self.n_muscles, self.muscle_names)
 
             while True:
                 # os.system('cls' if os.name == 'nt' else 'clear')
@@ -250,8 +250,8 @@ class ComputeMvc:
                             data_tmp = self.trigno_dev.read()
                             tic = time()
                     else:
-                        if c < self.EMG_exp.shape[1]:
-                            data_tmp = self.EMG_exp[: self.n_muscles, c : c + self.sample]
+                        if c < self.emg_exp.shape[1]:
+                            data_tmp = self.emg_exp[: self.n_muscles, c : c + self.sample]
                             c += self.sample
                         else:
                             c = 0
@@ -264,9 +264,9 @@ class ComputeMvc:
 
                     if show_data is True:
                         if nb_frame < self.acquisition_rate:
-                            update_plot_EMG(data, p, app, box)
+                            update_plot_emg(data, p, app, box)
                         else:
-                            update_plot_EMG(data[:, -self.MVC_windows :], p, app, box)
+                            update_plot_emg(data[:, -self.mvc_windows :], p, app, box)
 
                     nb_frame += 1
                     time_to_sleep = (1 / self.acquisition_rate) - (time() - tic)
@@ -284,7 +284,7 @@ class ComputeMvc:
                             pass
                     break
 
-            MVC_processed = self._process_MVC(data, save_tmp=True)
+            mvc_processed = self._process_mvc(data, save_tmp=True)
             n_p = 0
             plot_comm = "y"
             print(f"Trial {try_name} terminated. ")
@@ -307,7 +307,7 @@ class ComputeMvc:
 
                     if plot != "c":
                         print("Close the plot windows to continue.")
-                        self._plot_mvc(data, MVC_processed, plot, col=4)
+                        self._plot_mvc(data, mvc_processed, plot, col=4)
                     else:
                         pass
                     n_p += 1
@@ -351,10 +351,10 @@ class ComputeMvc:
 
                 print("Please wait during data processing (it could take some time)...")
                 if save == "s":
-                    list_mvc = self._process_MVC(data_final, save_final_data=True, return_list=True)
+                    list_mvc = self._process_mvc(data_final, save_final_data=True, return_list=True)
                     break
                 else:
-                    list_mvc = self._process_MVC(data_final, save_final_data=False, return_list=True)
+                    list_mvc = self._process_mvc(data_final, save_final_data=False, return_list=True)
                     break
 
         return list_mvc

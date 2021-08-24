@@ -92,11 +92,11 @@ if biorbd_module is True:
         return plt.show()
 
 
-def init_plot_EMG(nb_EMG, muscle_names=()):
+def init_plot_emg(nb_emg, muscle_names=()):
     """
             Initialize pyqtgraph for EMG
             ----------
-            nb_EMG: int
+            nb_emg: int
                 Number of EMG data to plot
 
             Returns
@@ -111,8 +111,8 @@ def init_plot_EMG(nb_EMG, muscle_names=()):
     box = []
     rplt = []
     row_count = 0
-    col_span = 4 if nb_EMG > 8 else 8
-    for emg in range(nb_EMG):
+    col_span = 4 if nb_emg > 8 else 8
+    for emg in range(nb_emg):
         remote.append(rgv.RemoteGraphicsView())
         remote[emg].pg.setConfigOptions(antialias=True)
         app.aboutToQuit.connect(remote[emg].close)
@@ -137,20 +137,20 @@ def init_plot_EMG(nb_EMG, muscle_names=()):
     return rplt, layout, app, box
 
 
-def update_plot_EMG(EMG, rplt, app, box):
+def update_plot_emg(emg_data, rplt, app, box):
     """
             update EMG plot
             ----------
-            EMG: np.ndarray
+            emg: np.ndarray
                 array of muscle size
             rplt, app, box:
                 values from init function
             Returns
             ----------
     """
-    for emg in range(EMG.shape[0]):
+    for emg in range(emg_data.shape[0]):
         if box[emg].isChecked() is True:
-            rplt[emg].plot(EMG[emg, :], clear=True, _callSync="off")
+            rplt[emg].plot(emg_data[emg, :], clear=True, _callSync="off")
     app.processEvents()
 
     return app
