@@ -267,23 +267,9 @@ def run(
 
             if OSC_stream is True:
                 if get_accel is True:
-                    i = 0
-                    for x in np.mean(accel_proc[:, :, -1:], axis=2):
-                        j = 0
-                        for y in x:
-                            OSC_client.send_message("/accel/" + str(i) + "/" + str(j), y)
-                            j += 1
-                        i += 1
-                    pass
+                    OSC_client.send_message("/accel/", np.mean(accel_proc[:, -IM_sample:], axis=1))
                 if get_gyro is True:
-                    i = 0
-                    for x in np.mean(gyro_proc[:, :, -1:], axis=2):
-                        j = 0
-                        for y in x:
-                            OSC_client.send_message("/gyro/" + str(i) + "/" + str(j), y)
-                            j += 1
-                        i += 1
-                    pass
+                    OSC_client.send_message("/gyro/", np.mean(gyro_proc[:, -IM_sample:], axis=1))
 
         # Save data
         if save_data is True:
