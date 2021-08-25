@@ -233,7 +233,7 @@ def run(
             if print_data is True:
                 print(f"EMG processed data :\n {emg_proc[:, -1:]}")
             if OSC_stream is True:
-                OSC_client.send_message("/EMG/processed/", emg_proc[:, -1:], axis=1)
+                OSC_client.send_message("/EMG/processed/", emg_proc[:, -1:])
 
         if get_accel is True or get_gyro is True:
             accel_tmp = data_IM_tmp[:, :3, :]
@@ -267,9 +267,9 @@ def run(
 
             if OSC_stream is True:
                 if get_accel is True:
-                    OSC_client.send_message("/accel/", accel_proc[:, :, -1:], axis=1)
+                    OSC_client.send_message("/accel/", accel_proc[:, :, -1:])
                 if get_gyro is True:
-                    OSC_client.send_message("/gyro/", gyro_proc[:, :, -1:], axis=1)
+                    OSC_client.send_message("/gyro/", gyro_proc[:, :, -1:])
 
         # Save data
         if save_data is True:
