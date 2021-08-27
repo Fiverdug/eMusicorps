@@ -1,7 +1,7 @@
 from MVC_pytrigno import ComputeMvc
 
 # number of EMG electrode
-n_electrode = 10
+n_electrode = 2
 
 # set file and directory to save
 file_name = "MVC_xxxx.mat"
@@ -11,6 +11,9 @@ device_host = "192.168.1.211"
 # Run MVC
 muscles_idx = (0, n_electrode - 1)
 MVC = ComputeMvc(
+    stream_mode="server_data",
+    server_ip='localhost',
+    server_port=50000,
     range_muscles=muscles_idx,
     output_dir=file_dir,
     device_host=device_host,

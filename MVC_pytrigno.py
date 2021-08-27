@@ -1,5 +1,6 @@
 from time import sleep, strftime, time
 import os
+from client import Client
 from data_processing import process_emg
 import numpy as np
 from data_plot import init_plot_emg, update_plot_emg
@@ -48,7 +49,7 @@ class ComputeMvc:
     def __init__(
         self,
         range_muscles,
-        stream_mode="pytrigno",
+        stream_mode="pytrigno",  # or 'server_data'
         output_dir=None,
         output_file=None,
         muscle_names=None,
@@ -214,7 +215,7 @@ class ComputeMvc:
         device_info = []
         try_number = 0
         while True:
-            if self.stream_mode == "pytrigno":
+            if self.stream_mode == "pytrigno" or "server_data":
                 data_tmp, data = [], []
             else:
                 data_tmp, data = np.ndarray((len(device_info), self.sample)), []
@@ -249,6 +250,22 @@ class ComputeMvc:
                             # self.trigno_dev.start()
                             data_tmp = self.trigno_dev.read()
                             tic = time()
+
+                        elif self.stream_mode == "server_data":
+                            client = Client(self.server_ip, self.server_port)
+                            data_tmp = client.get_data(
+                                        ["emg"],
+                                        Nmhe=self.acquisition_rate,
+                                        nb_of_data=1,
+                                        exp_freq=self.acquisition_rate,
+                                        EMG_wind=2000,
+                                        get_names=False,
+                                        raw=True,
+                                        norm_emg=False
+                                        )
+                            data_tmp = np.array(data_tmp["raw_emg"])
+                            tic = time()
+
                     else:
                         if c < self.emg_exp.shape[1]:
                             data_tmp = self.emg_exp[: self.n_muscles, c : c + self.sample]
@@ -256,7 +273,6 @@ class ComputeMvc:
                         else:
                             c = 0
                         tic = time()
-
                     if nb_frame == 0:
                         data = data_tmp
                     else:
