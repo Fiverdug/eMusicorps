@@ -63,7 +63,7 @@ def process_IMU(
         IM_proc = np.zeros((IM_tmp.shape[0], IM_tmp.shape[1], 1))
         raw_IM = IM_tmp
 
-    elif raw_IM.shape[2] < ma_win:
+    elif raw_IM.shape[2] < IM_win:
         IM_proc = np.zeros((IM_tmp.shape[0], IM_tmp.shape[1], int(raw_IM.shape[2] / IM_sample)))
         raw_IM = np.append(raw_IM[:, :, -IM_win + IM_sample :], IM_tmp, axis=2)
 
@@ -76,9 +76,10 @@ def process_IMU(
                 average = abs(np.linalg.norm(average, axis=1) - 1)
             else:
                 average = np.linalg.norm(average, axis=1)
+
         if norm_min_bound or norm_max_bound:
-            for i in range(average.shape[0]):
-                for j in range(average.shape[1]):
+            for i in range(raw_IM.shape[0]):
+                for j in range(raw_IM.shape[1]):
                     if average[i, j, :] < 0:
                         average[i, j, :] = average[i, j, :] / abs(norm_min_bound)
                     elif average[i, j, :] >= 0:
