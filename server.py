@@ -17,11 +17,10 @@ import json
 
 try:
     from vicon_dssdk import ViconDataStream as VDS
-
-    try_wt_vicon = False
+    # try_wt_vicon = False
 except ModuleNotFoundError:
-    try_wt_vicon = True
-
+    # try_wt_vicon = True
+    pass
 Buff_size = 100000
 
 
@@ -199,6 +198,7 @@ class Server:
         norm_max_gyro_value=None,
         subject_name=None,
         emg_device_name=None,
+        test_with_connection=True
     ):
 
         self.device_name = emg_device_name
@@ -217,6 +217,7 @@ class Server:
         self.norm_max_accel_value = norm_max_accel_value
         self.norm_max_gyro_value = norm_max_gyro_value
         self.norm_min_gyro_value = norm_min_gyro_value
+        self.try_wt_vicon = False if test_with_connection else True
 
         data_type = []
         if self.stream_emg:
@@ -230,7 +231,7 @@ class Server:
             raise RuntimeError("Not implemented yet")
 
         self.imu_sample = int(self.imu_rate / self.system_rate)
-        if try_wt_vicon:
+        if self.try_wt_vicon:
             data_exp = sio.loadmat("/home/amedeo/Documents/programmation/RT_Optim/data_rt/data_exp.mat")
             data = sio.loadmat("test_IMU.mat")
             # self.emg_exp = sio.loadmat("EMG_test.mat")["EMG"][:, :1500]
@@ -745,7 +746,7 @@ class Server:
                 markers = markers_data["markers"]
                 states = markers_data["states"]
                 model = self.model
-                if try_wt_vicon is not True:
+                if self.try_wt_vicon is not True:
                     markers_tmp, self.marker_names, occluded = self.get_markers()
                     if self.iter > 0:
                         for i in range(markers_tmp.shape[1]):
