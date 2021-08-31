@@ -5,7 +5,6 @@ from time import time
 
 try:
     from pyomeca import Analogs
-
     pyomec_module = True
 except ModuleNotFoundError:
     pyomec_module = False
@@ -60,11 +59,17 @@ def process_IMU(
 ):
 
     if len(raw_IM) == 0:
-        IM_proc = np.zeros((IM_tmp.shape[0], IM_tmp.shape[1], 1))
+        if squared is not True:
+            IM_proc = np.zeros((IM_tmp.shape[0], IM_tmp.shape[1], 1))
+        else:
+            IM_proc = np.zeros((IM_tmp.shape[0], 1))
         raw_IM = IM_tmp
 
     elif raw_IM.shape[2] < IM_win:
-        IM_proc = np.zeros((IM_tmp.shape[0], IM_tmp.shape[1], int(raw_IM.shape[2] / IM_sample)))
+        if squared is not True:
+            IM_proc = np.zeros((IM_tmp.shape[0], IM_tmp.shape[1], int(raw_IM.shape[2] / IM_sample)))
+        else:
+            IM_proc = np.zeros((IM_tmp.shape[0], int(raw_IM.shape[2] / IM_sample)))
         raw_IM = np.append(raw_IM[:, :, -IM_win + IM_sample :], IM_tmp, axis=2)
 
     else:
@@ -77,14 +82,25 @@ def process_IMU(
             else:
                 average = np.linalg.norm(average, axis=1)
 
-        if norm_min_bound or norm_max_bound:
-            for i in range(raw_IM.shape[0]):
-                for j in range(raw_IM.shape[1]):
-                    if average[i, j, :] < 0:
-                        average[i, j, :] = average[i, j, :] / abs(norm_min_bound)
-                    elif average[i, j, :] >= 0:
-                        average[i, j, :] = average[i, j, :] / norm_max_bound
-        IM_proc = np.append(IM_proc[:, :, 1:], average, axis=2)
+        if average.shape == 3:
+            if norm_min_bound or norm_max_bound:
+                for i in range(raw_IM.shape[0]):
+                    for j in range(raw_IM.shape[1]):
+                        if average[i, j, :] < 0:
+                            average[i, j, :] = average[i, j, :] / abs(norm_min_bound)
+                        elif average[i, j, :] >= 0:
+                            average[i, j, :] = average[i, j, :] / norm_max_bound
+            IM_proc = np.append(IM_proc[:, :, 1:], average, axis=2)
+
+        else:
+            if norm_min_bound or norm_max_bound:
+                for i in range(raw_IM.shape[0]):
+                    for j in range(raw_IM.shape[1]):
+                        if average[i, :] < 0:
+                            average[i, :] = average[i, :] / abs(norm_min_bound)
+                        elif average[i, :] >= 0:
+                            average[i, :] = average[i, :] / norm_max_bound
+            IM_proc = np.append(IM_proc[:, 1:], average, axis=1)
 
     return raw_IM, IM_proc
 

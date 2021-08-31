@@ -1,11 +1,12 @@
 import scipy.io as sio
 from client import Client
 import numpy as np
+from time import time
 
 if __name__ == '__main__':
     # Set program variables
     read_freq = 100  # Be sure that it's the same than server read frequency
-    n_electrode = 2
+    n_electrode = 5
     show_data = ["raw_emg"]  # can be ["emg"] to show process EMG
     device_host = "192.168.1.211"  # IP address of computer which run trigno device
 
@@ -49,10 +50,17 @@ if __name__ == '__main__':
 
         EMG = np.array(data['emg'])
         raw_emg = np.array(data['raw_emg'])
-        accel_proc = np.array(data['imu'])[:, :3, :]
-        gyro_proc = np.array(data['imu'])[:, 3:6, :]
-        raw_accel = np.array(data['raw_imu'])[:, :3, :]
-        raw_gyro = np.array(data['raw_imu'])[:, 3:6, :]
+
+        if np.array(data['imu']).shape == 3:
+            accel_proc = np.array(data['imu'])[:, :3, :]
+            gyro_proc = np.array(data['imu'])[:, 3:6, :]
+            raw_accel = np.array(data['raw_imu'])[:, :3, :]
+            raw_gyro = np.array(data['raw_imu'])[:, 3:6, :]
+        else:
+            accel_proc = np.array(data['imu'])[:n_electrode, :]
+            gyro_proc = np.array(data['imu'])[n_electrode:, :]
+            raw_accel = np.array(data['raw_imu'])[:, :3, :]
+            raw_gyro = np.array(data['raw_imu'])[:, 3:6, :]
 
         if print_data is True:
             print(f"Accel data :\n"
@@ -68,7 +76,13 @@ if __name__ == '__main__':
         if OSC_stream is True:
             if get_emg is True:
                 OSC_client.send_message("/EMG/processed/", EMG[:, -1:])
-            if get_accel is True:
-                OSC_client.send_message("/accel/", accel_proc[:, :, -1:])
-            if get_gyro is True:
-                OSC_client.send_message("/gyro/", gyro_proc[:, :, -1:])
+            if np.array(data['imu']).shape == 3:
+                if get_accel is True:
+                    OSC_client.send_message("/accel/", accel_proc[:, :, -1:])
+                if get_gyro is True:
+                    OSC_client.send_message("/gyro/", gyro_proc[:, :, -1:])
+            else:
+                if get_accel is True:
+                    OSC_client.send_message("/accel/", accel_proc[:, -1:])
+                if get_gyro is True:
+                    OSC_client.send_message("/gyro/", gyro_proc[:, -1:])

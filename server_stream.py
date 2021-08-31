@@ -1,5 +1,5 @@
 from server import Server
-import scipy.io as sio
+
 if __name__ == '__main__':
     # IP_server = '192.168.1.211'
     IP_server = "localhost"
@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
     # Set program variables
     read_freq = 100
-    n_electrode = 2
+    n_electrode = 5
 
     # Set file to save data
     output_file = "stream_data_xxx"
@@ -42,5 +42,5 @@ if __name__ == '__main__':
         optim=True,
         plot_emg=False,
         norm_emg=False,
-        test_with_connection = True
+        test_with_connection=False
     )

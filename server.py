@@ -12,14 +12,18 @@ import os
 try:
     import biorbd
 except ModuleNotFoundError:
+    pass
+
+try:
     import biorbd_casadi as biord
+except ModuleNotFoundError:
+    pass
+
 import json
 
 try:
     from vicon_dssdk import ViconDataStream as VDS
-    # try_wt_vicon = False
 except ModuleNotFoundError:
-    # try_wt_vicon = True
     pass
 Buff_size = 100000
 
@@ -48,7 +52,6 @@ class Server:
         emg_dec=8,
         timeout=-1,
         buff_size=Buff_size,
-        n_limit=10,
         device=None,  # 'vicon' or 'pytrigno',
         host_pytrigno=None,
         muscle_range=None,
@@ -81,18 +84,16 @@ class Server:
         self.buff_size = buff_size
         self.Nmhe = mhe_size
         self.ocp_freq = ocp_freq
-        self.try_wt_vicon = try_wt_vicon
+        self.try_wt_vicon = ()
         self.save_data = save_data
         self.raw_data = False
+        self.try_w_connection = True
         if device == "vicon":
             self.model = biorbd.Model(self.model_path)
         else:
             self.model = ()
         self.device = device if device else "vicon"
         self.host_ip = host_pytrigno if host_pytrigno else "localhost"
-
-        if self.try_wt_vicon is True:
-            print("[Warning] Debug mode without vicon connection.")
 
         current_time = strftime("%Y%m%d-%H%M")
         output_file = output_file if output_file else f"trigno_streaming_{current_time}"
@@ -126,8 +127,6 @@ class Server:
         self.nb_electrodes = muscle_range[1] - muscle_range[0] + 1
         self.emg_sample = 0
         self.imu_sample = 0
-        # if device == 'pytrigno' and muscle_range is None:
-        #     raise RuntimeError("Please define a range for muscles while using pytrigno")
         self.muscle_range = muscle_range if muscle_range else (0, 15)
 
         # Multiprocess stuff
@@ -144,33 +143,6 @@ class Server:
         self.event_kin = mp.Event()
         self.event_imu = mp.Event()
         self.process = mp.Process
-
-        # # Start connexion
-        # if self.type == "TCP":
-        #     self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #     self.server_2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # elif self.type == "UDP":
-        #     self.server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        #     self.server_2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # else:
-        #     raise RuntimeError(f"Invalid type of connexion ({type}). Type must be 'TCP' or 'UDP'.")
-        # try:
-        #     self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        #     self.server_2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        #     self.server.bind((IP, port))
-        #     IP_2='localhost'
-        #     port_2 = port + 1
-        #     self.server_2.bind(('localhost', 40000))
-        #     if self.type != "UDP":
-        #         self.server.listen(n_limit)
-        #         self.inputs = [self.server]
-        #         self.outputs = []
-        #         self.message_queues = {}
-        #     print(f"TCP server is listening on '{self.address}'.") if self.type == "TCP" else print(
-        #         f"UDP server is listening on '{self.address}'."
-        #     )
-        # except ConnectionError:
-        #     raise RuntimeError("Unknown error. Server is not listening.")
 
     @staticmethod
     def __server_sock(type):
@@ -204,8 +176,6 @@ class Server:
         self.device_name = emg_device_name
         self.plot_emg = plot_emg
         self.mvc_list = mvc_list
-        # if isinstance(self.mvc_list, list) is not True and mvc_list is not None:
-        #     raise RuntimeError("mvc must be a list with length of muscles numbers.")
         self.norm_emg = norm_emg
         self.optim = optim
         self.stream_emg = stream_emg
@@ -217,7 +187,10 @@ class Server:
         self.norm_max_accel_value = norm_max_accel_value
         self.norm_max_gyro_value = norm_max_gyro_value
         self.norm_min_gyro_value = norm_min_gyro_value
-        self.try_wt_vicon = False if test_with_connection else True
+        self.try_w_connection = test_with_connection
+
+        if self.try_w_connection is not True:
+            print("[Warning] Debug mode without vicon connection.")
 
         data_type = []
         if self.stream_emg:
@@ -231,18 +204,19 @@ class Server:
             raise RuntimeError("Not implemented yet")
 
         self.imu_sample = int(self.imu_rate / self.system_rate)
-        if self.try_wt_vicon:
-            data_exp = sio.loadmat("/home/amedeo/Documents/programmation/RT_Optim/data_rt/data_exp.mat")
-            data = sio.loadmat("test_IMU.mat")
-            # self.emg_exp = sio.loadmat("EMG_test.mat")["EMG"][:, :1500]
-            self.IM_exp = np.concatenate((data["raw_accel"][:, :, :6000], data["raw_gyro"][:, :, :6000]), axis=1)
+        if self.try_w_connection is not True:
+            data_exp = sio.loadmat("test_wt_connection.mat")
+            self.IM_exp = np.concatenate(
+                (data_exp["raw_accel"][:self.nb_electrodes, :, :1000],
+                 data_exp["raw_gyro"][:self.nb_electrodes, :, :1000]), axis=1
+            )
             self.system_rate = self.system_rate
             self.emg_sample = int(self.emg_rate / self.system_rate)
             self.imu_sample = int(self.imu_rate / self.system_rate)
-            self.emg_exp = data_exp["emg"]
-            self.nb_emg = self.emg_exp.shape[0]
-            self.markers_exp = data_exp["markers"]
-            self.markers_exp = np.nan_to_num(self.markers_exp)
+            self.emg_exp = data_exp["raw_EMG"][:self.nb_electrodes, :]
+            if "markers" in data_exp.keys():
+                self.markers_exp = data_exp["markers"]
+                self.markers_exp = np.nan_to_num(self.markers_exp)
             self.init_frame = 500
             self.last_frame = 1700
             self.m = self.init_frame
@@ -576,9 +550,9 @@ class Server:
     def _init_pytrigno(self):
         if self.stream_emg is True:
             self.emg_sample = int(self.emg_rate / self.system_rate)
-            if self.norm_emg is True and len(self.mvc_list) != self.nb_emg:
+            if self.norm_emg is True and len(self.mvc_list) != self.nb_electrodes:
                 raise RuntimeError(
-                    f"Length of the mvc list ({self.mvc_list}) " f"not consistent with emg number ({self.nb_emg})."
+                    f"Length of the mvc list ({self.mvc_list}) " f"not consistent with emg number ({self.nb_electrodes})."
                 )
             self.emg_empty = np.zeros((len(self.device_info), self.emg_sample))
             self.dev_emg = pytrigno.TrignoEMG(
@@ -653,7 +627,7 @@ class Server:
         while True:
             try:
                 emg_data = self.emg_queue_in.get_nowait()
-                if self.try_wt_vicon is True:
+                if self.try_w_connection is not True:
                     if c < self.emg_exp.shape[1]:
                         emg_tmp = self.emg_exp[: self.nb_electrodes, c: c + self.emg_sample]
                         c += self.emg_sample
@@ -689,7 +663,7 @@ class Server:
                 is_working = False
 
             if is_working:
-                if self.try_wt_vicon is True:
+                if self.try_w_connection is not True:
                     # imu_tmp = np.random.random((self.nb_electrodes, 9, self.imu_sample))
                     # imu_tmp = self.imu_exp[: self.nb_imu, self.c: self.c + self.imu_sample]
                     # self.c = self.c + 1 if self.c < self.last_frame * 20 else self.init_frame * 20
@@ -705,11 +679,16 @@ class Server:
                 gyro_tmp = imu_tmp[:, 3:6, :]
                 raw_imu, imu_proc = imu_data["raw_imu"], imu_data["imu_proc"]
                 if len(raw_imu) != 0:
-                    raw_accel, accel_proc = raw_imu[:, :3, :], imu_proc[:, :3, :]
-                    raw_gyro, gyro_proc = raw_imu[:, 3:6, :], imu_proc[:, 3:6, :]
+                    if imu_proc.shape == 3:
+                        raw_accel, accel_proc = raw_imu[:, :3, :], imu_proc[:, :3, :]
+                        raw_gyro, gyro_proc = raw_imu[:, 3:6, :], imu_proc[:, 3:6, :]
+                    else:
+                        raw_accel, accel_proc = raw_imu[:, :3, :], imu_proc[:self.nb_electrodes, :]
+                        raw_gyro, gyro_proc = raw_imu[:, 3:6, :], imu_proc[self.nb_electrodes:, :]
                 else:
                     raw_accel, accel_proc = raw_imu, imu_proc
                     raw_gyro, gyro_proc = raw_imu, imu_proc
+
                 raw_accel, accel_proc = process_IMU(
                     accel_proc,
                     raw_accel,
@@ -720,7 +699,7 @@ class Server:
                     accel=True,
                     norm_min_bound=self.norm_min_accel_value,
                     norm_max_bound=self.norm_max_accel_value,
-                    squared=False,
+                    squared=True,
                 )
                 raw_gyro, gyro_proc = process_IMU(
                     gyro_proc,
@@ -732,9 +711,13 @@ class Server:
                     accel=True,
                     norm_min_bound=self.norm_min_gyro_value,
                     norm_max_bound=self.norm_max_gyro_value,
-                    squared=False,
+                    squared=True,
                 )
-                raw_imu, imu_proc = np.concatenate((raw_accel, raw_gyro), axis=1), np.concatenate((accel_proc, gyro_proc), axis=1)
+                if raw_gyro.shape == 3:
+                    raw_imu, imu_proc = np.concatenate((raw_accel, raw_gyro), axis=1), np.concatenate((accel_proc, gyro_proc), axis=1)
+                else:
+                    raw_imu, imu_proc = np.concatenate((raw_accel, raw_gyro), axis=1), np.concatenate(
+                        (accel_proc, gyro_proc), axis=0)
                 self.imu_queue_out.put({"raw_imu": raw_imu, "imu_proc": imu_proc})
                 self.event_imu.set()
                 # pass
@@ -746,7 +729,7 @@ class Server:
                 markers = markers_data["markers"]
                 states = markers_data["states"]
                 model = self.model
-                if self.try_wt_vicon is not True:
+                if self.try_w_connection:
                     markers_tmp, self.marker_names, occluded = self.get_markers()
                     if self.iter > 0:
                         for i in range(markers_tmp.shape[1]):
@@ -792,7 +775,7 @@ class Server:
         states = []
         emg_to_put = []
 
-        if self.try_wt_vicon is not True:
+        if self.try_w_connection:
             if self.device == "vicon":
                 self._init_vicon_client()
             else:
@@ -802,7 +785,7 @@ class Server:
         self.nb_marks = len(self.marker_names)
 
         if self.plot_emg:
-            p, win_emg, app, box = init_plot_emg(self.nb_emg)
+            p, win_emg, app, box = init_plot_emg(self.nb_electrodes)
         delta = 0
         delta_tmp = 0
         self.iter = 0
@@ -810,7 +793,7 @@ class Server:
         self.initial_time = time()
         while True:
             tic = time()
-            if self.try_wt_vicon is not True:
+            if self.try_w_connection:
                 if self.device == "pytrigno":
                     frame = self.vicon_client.GetFrame()
                     if frame is not True:
@@ -894,10 +877,16 @@ class Server:
                     data_to_save["raw_emg"] = raw_emg[:, -self.emg_sample:]
 
                 if self.stream_imu is True:
-                    data_to_save["accel_proc"] = imu_proc[:, 0:3, -1:]
-                    data_to_save["raw_accel"] = raw_imu[:, 0:3, -self.imu_sample:]
-                    data_to_save["gyro_proc"] = imu_proc[:, 3:6, -1:]
-                    data_to_save["raw_gyro"] = raw_imu[:, 3:6, -self.imu_sample:]
+                    if imu_proc.shape == 3:
+                        data_to_save["accel_proc"] = imu_proc[:, 0:3, -1:]
+                        data_to_save["raw_accel"] = raw_imu[:, 0:3, -self.imu_sample:]
+                        data_to_save["gyro_proc"] = imu_proc[:, 3:6, -1:]
+                        data_to_save["raw_gyro"] = raw_imu[:, 3:6, -self.imu_sample:]
+                    else:
+                        data_to_save["accel_proc"] = imu_proc[:self.nb_electrodes, -1:]
+                        data_to_save["raw_accel"] = raw_imu[:, 0:3, -self.imu_sample:]
+                        data_to_save["gyro_proc"] = imu_proc[self.nb_electrodes:, -1:]
+                        data_to_save["raw_gyro"] = raw_imu[:, 3:6, -self.imu_sample:]
 
                 add_data_to_pickle(data_to_save, self.data_path)
 
@@ -952,7 +941,7 @@ class Server:
         emg = self.emg_empty
         output_names = [] if output_names is None else output_names
         emg_names = [] if emg_names is None else emg_names
-        if self.try_wt_vicon is not True:
+        if self.try_w_connection:
             if self.device == "vicon":
                 if init is True:
                     count = 0
@@ -978,7 +967,7 @@ class Server:
             return emg, emg_names
 
     def get_imu(self):
-        if self.try_wt_vicon is not True:
+        if self.try_w_connection:
             if self.device == "vicon":
                 raise RuntimeError("IMU data not implemented yet with vicon")
             else:
