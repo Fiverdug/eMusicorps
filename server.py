@@ -32,8 +32,7 @@ class Server:
     def __init__(
         self,
         IP,
-        port,
-        port_2=None,
+        server_ports,
         type=None,
         ocp_freq=100,
         mhe_size=100,
@@ -62,10 +61,10 @@ class Server:
 
         # problem variables
         self.IP = IP
-        self.port = port
-        self.port_2 = port_2
-        self.address_1 = f"{IP}:{port}"
-        self.address_2 = f"{IP}:{port_2}"
+        if isinstance(server_ports, list):
+            self.ports = server_ports
+        else:
+            self.ports = [server_ports]
         self.type = type if type is not None else "TCP"
         self.timeout = timeout if timeout != -1 else 10000
         self.system_rate = system_rate
@@ -92,7 +91,7 @@ class Server:
             self.model = biorbd.Model(self.model_path)
         else:
             self.model = ()
-        self.device = device if device else "vicon"
+        self.device = device if device else "pytrigno"
         self.host_ip = host_pytrigno if host_pytrigno else "localhost"
 
         current_time = strftime("%Y%m%d-%H%M")
@@ -130,19 +129,22 @@ class Server:
         self.muscle_range = muscle_range if muscle_range else (0, 15)
 
         # Multiprocess stuff
-        manager = mp.Manager()
-        self.data = manager.Queue()
-        self.data_2 = manager.Queue()
-        self.emg_queue_in = manager.Queue()
-        self.emg_queue_out = manager.Queue()
-        self.imu_queue_in = manager.Queue()
-        self.imu_queue_out = manager.Queue()
-        self.kin_queue_in = manager.Queue()
-        self.kin_queue_out = manager.Queue()
+        self.manager = mp.Manager()
+        self.server_queue = []
+        for i in range(len(self.ports)):
+            self.server_queue.append(self.manager.Queue())
+        self.emg_queue_in = self.manager.Queue()
+        self.emg_queue_out = self.manager.Queue()
+        self.imu_queue_in = self.manager.Queue()
+        self.imu_queue_out = self.manager.Queue()
+        self.kin_queue_in = self.manager.Queue()
+        self.kin_queue_out = self.manager.Queue()
         self.event_emg = mp.Event()
         self.event_kin = mp.Event()
         self.event_imu = mp.Event()
         self.process = mp.Process
+        self.servers = []
+        self.count_server = 0
 
     @staticmethod
     def __server_sock(type):
@@ -177,6 +179,8 @@ class Server:
         self.plot_emg = plot_emg
         self.mvc_list = mvc_list
         self.norm_emg = norm_emg
+        if self.norm_emg is True and self.mvc_list is None:
+            raise RuntimeError("Please define a MVC list to normalize EMG or turn 'norm_emg' to False")
         self.optim = optim
         self.stream_emg = stream_emg
         self.stream_markers = stream_markers
@@ -188,7 +192,6 @@ class Server:
         self.norm_max_gyro_value = norm_max_gyro_value
         self.norm_min_gyro_value = norm_min_gyro_value
         self.try_w_connection = test_with_connection
-
         if self.try_w_connection is not True:
             print("[Warning] Debug mode without vicon connection.")
 
@@ -198,8 +201,7 @@ class Server:
         if self.stream_markers or self.recons_kalman:
             data_type.append("markers")
         if self.stream_imu:
-            if self.device == "vicon":
-                raise RuntimeError("Not implemented yet with vicon")
+            data_type.append("imu")
         if self.stream_force_plate:
             raise RuntimeError("Not implemented yet")
 
@@ -223,13 +225,33 @@ class Server:
             self.c = self.init_frame * 20
             self.marker_names = []
 
+        # Start connexion
+        for i in range(len(self.ports)):
+            if self.type == "TCP":
+                self.servers.append(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+            elif self.type == "UDP":
+                self.servers.append(socket.socket(socket.AF_INET, socket.SOCK_DGRAM))
+            else:
+                raise RuntimeError(f"Invalid type of connexion ({type}). Type must be 'TCP' or 'UDP'.")
+            try:
+                self.servers[i].setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self.servers[i].bind((self.IP, self.ports[i]))
+                if self.type != "UDP":
+                    self.servers[i].listen(10)
+                    self.inputs = [self.servers[i]]
+                    self.outputs = []
+                    self.message_queues = {}
+
+            except ConnectionError:
+                raise RuntimeError("Unknown error. Server is not listening.")
+
+        open_server = []
         save_data = self.process(name="vicon", target=Server.save_vicon_data, args=(self,))
         save_data.start()
-        open_server = self.process(name="listen", target=Server.open_server, args=(self,))
-        open_server.start()
-        if self.port_2:
-            open_server_2 = self.process(name="listen_2", target=Server.open_server_2, args=(self,))
-            open_server_2.start()
+        for i in range(len(self.ports)):
+            open_server.append(self.process(name="listen"+f"_{i}", target=Server.open_server, args=(self,)))
+            open_server[i].start()
+            self.count_server += 1
         if self.stream_emg:
             mproc_emg = self.process(name="process_emg", target=Server.emg_processing, args=(self,))
             mproc_emg.start()
@@ -240,9 +262,9 @@ class Server:
             mproc_kin = self.process(name="kin", target=Server.recons_kin, args=(self,))
             mproc_kin.start()
         save_data.join()
-        open_server.join()
-        if self.port_2:
-            open_server_2.join()
+        for i in range(len(self.ports)):
+            open_server[i].join()
+            self.count_server += 1
         if self.stream_emg:
             mproc_emg.join()
         if self.stream_markers:
@@ -251,32 +273,11 @@ class Server:
             mproc_imu.join()
 
     def open_server(self):
-        # Start connexion
-        if self.type == "TCP":
-            self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        elif self.type == "UDP":
-            self.server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        else:
-            raise RuntimeError(f"Invalid type of connexion ({type}). Type must be 'TCP' or 'UDP'.")
-        try:
-            self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server.bind((self.IP, self.port))
-            if self.type != "UDP":
-                self.server.listen(10)
-                self.inputs = [self.server]
-                self.outputs = []
-                self.message_queues = {}
-            print(f"{self.type} server is listening on '{self.address_1}'.")
-
-        except ConnectionError:
-            raise RuntimeError("Unknown error. Server is not listening.")
-        print(
-            f"Server is waiting for an event. Please use 'ctrl + C' to exit the program.\n"
-            f"You have chosen an emg rate of {self.emg_rate}Hz and a processing windows of {self.emg_windows} values,"
-            f" so please wait at least {self.emg_windows / self.emg_rate} s before getting data."
-        )
+        server_idx = self.count_server
+        print(f"{self.type} server {server_idx} is listening on '{self.IP}:{self.ports[server_idx]}' "
+              f"and waiting for a client.")
         while 1:
-            connection, ad = self.server.accept()
+            connection, ad = self.servers[server_idx].accept()
             if self.optim is not True:
                 print(f"new connection from {ad}")
             if self.type == "TCP":
@@ -287,7 +288,7 @@ class Server:
 
                 while len(data_queue) == 0:
                     try:
-                        data_queue = self.data.get_nowait()
+                        data_queue = self.server_queue[server_idx].get_nowait()
                         is_working = True
                     except:
                         is_working = False
@@ -301,12 +302,6 @@ class Server:
                         self.nb_of_data = (
                             message["nb_of_data"] if message["nb_of_data"] is not None else self.nb_of_data
                         )
-
-                        # if self.ocp_freq > self.system_rate:
-                        #     raise RuntimeError(f'Problem frequency ({self.ocp_freq} '
-                        #                        f'is bigger than acquisition frequency({self.system_rate}.')
-                        #
-
                         ratio = int(self.system_rate / self.ocp_freq)
                         nb_data_ocp_duration = int(ratio * (self.Nmhe + 1))
                         data_to_prepare = {}
@@ -316,10 +311,8 @@ class Server:
                                 if i == "emg":
                                     if self.stream_emg:
                                         if self.raw_data:
-                                            # emg = data_queue["emg_proc"]
                                             raw_emg = data_queue["raw_emg"]
                                             data_to_prepare["raw_emg"] = raw_emg
-                                        # else:
                                         emg = data_queue["emg_proc"]
                                         if norm_emg:
                                             if isinstance(mvc_list, np.ndarray) is True:
@@ -345,14 +338,9 @@ class Server:
                                     if self.stream_imu:
                                         if self.raw_data:
                                             raw_imu = data_queue["raw_imu"]
-                                            # imu = data_queue["imu_proc"]
                                             data_to_prepare["raw_imu"] = raw_imu
-                                        # else:
-                                        #     imu = data_queue["imu_proc"]
                                         imu = data_queue["imu_proc"]
                                         data_to_prepare["imu"] = imu
-
-
                                     else:
                                         raise RuntimeError(f"Data you asking for ({i}) is not streaming")
 
@@ -388,150 +376,11 @@ class Server:
                         if self.optim is not True:
                             print(f"Data of size {sys.getsizeof(dic_to_send)} sent to the client.")
 
-
-    def open_server_2(self):
-        # Start connexion
-        if self.type == "TCP":
-            self.server_2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        elif self.type == "UDP":
-            self.server_2 = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        else:
-            raise RuntimeError(f"Invalid type of connexion ({type}). Type must be 'TCP' or 'UDP'.")
-        try:
-            self.server_2.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.server_2.bind((self.IP, self.port_2))
-            if self.type != "UDP":
-                self.server_2.listen(10)
-                self.inputs = [self.server_2]
-                self.outputs = []
-                self.message_queues = {}
-            print(f"TCP server is listening on '{self.address_2}'.") if self.type == "TCP" else print(
-                f"UDP server is listening on '{self.address_2}'."
-            )
-        except ConnectionError:
-            raise RuntimeError("Unknown error. Server is not listening.")
-        print(
-            f"Server_2 is waiting for an event. Please use 'ctrl + C' to exit the program.\n"
-            f"You have chosen an emg rate of {self.emg_rate}Hz and a processing windows of {self.emg_windows} values,"
-            f" so please wait at least {self.emg_windows / self.emg_rate} s before getting data."
-        )
-        while 1:
-            connection, ad = self.server_2.accept()
-            if self.optim is not True:
-                print(f"new connection from {ad}")
-            if self.type == "TCP":
-                message = json.loads(connection.recv(self.buff_size))
-                if self.optim is not True:
-                    print(f"client sended {message}")
-                data_queue_2 = ()
-
-                while len(data_queue_2) == 0:
-                    try:
-                        data_queue_2 = self.data_2.get_nowait()
-                        self.Nmhe = message["Nmhe"]
-                        self.ocp_freq = message["exp_freq"]
-                        self.raw_data = message["raw_data"]
-                        mvc_list = message["mvc_list"]
-                        norm_emg = message['norm_emg']
-                        self.nb_of_data = (
-                            message["nb_of_data"] if message["nb_of_data"] is not None else self.nb_of_data
-                        )
-
-                        # if self.ocp_freq > self.system_rate:
-                        #     raise RuntimeError(f'Problem frequency ({self.ocp_freq} '
-                        #                        f'is bigger than acquisition frequency({self.system_rate}.')
-                        #
-
-                        ratio = int(self.system_rate / self.ocp_freq)
-                        nb_data_ocp_duration = int(ratio * (self.Nmhe + 1))
-                        data_to_prepare = {}
-
-                        if len(message["command"]) != 0:
-                            for i in message["command"]:
-                                if i == "emg":
-                                    if self.stream_emg:
-                                        if self.raw_data:
-                                            # emg = data_queue["emg_proc"]
-                                            raw_emg = data_queue_2["raw_emg"]
-                                            data_to_prepare["raw_emg"] = raw_emg
-                                        # else:
-                                        emg = data_queue_2["emg_proc"]
-                                        if norm_emg:
-                                            if isinstance(mvc_list, np.ndarray) is True:
-                                                if len(mvc_list.shape) == 1:
-                                                    quot = mvc_list.reshape(-1, 1)
-                                                else:
-                                                    quot = mvc_list
-                                            else:
-                                                quot = np.array(mvc_list).reshape(-1, 1)
-                                        else:
-                                            quot = [1]
-                                        data_to_prepare["emg"] = emg / quot
-
-                                    else:
-                                        raise RuntimeError(f"Data you asking for ({i}) is not streaming")
-                                elif i == "markers":
-                                    if self.stream_markers:
-                                        markers = data_queue_2["markers"]
-                                        data_to_prepare["markers"] = markers
-                                    else:
-                                        raise RuntimeError(f"Data you asking for ({i}) is not streaming")
-
-                                elif i == "imu":
-                                    if self.stream_imu:
-                                        if self.raw_data:
-                                            raw_imu = data_queue_2["raw_imu"]
-                                            # imu = data_queue["imu_proc"]
-                                            data_to_prepare["raw_imu"] = raw_imu
-                                        # else:
-                                        #     imu = data_queue["imu_proc"]
-                                        imu = data_queue_2["imu_proc"]
-                                        data_to_prepare["imu"] = imu
-
-                                    else:
-                                        raise RuntimeError(f"Data you asking for ({i}) is not streaming")
-
-                                elif i == "force plate":
-                                    raise RuntimeError("Not implemented yet.")
-                                else:
-                                    raise RuntimeError(
-                                        f"Unknown command '{i}'. Command must be :'emg', 'markers' or 'imu' "
-                                    )
-
-                        if message["kalman"] is True:
-                            if self.recons_kalman:
-                                angle = data_queue_2["kalman"]
-                                data_to_prepare["kalman"] = angle
-                            else:
-                                raise RuntimeError(
-                                    f"Kalman reconstruction is not activate. "
-                                    f"Please turn server flag recons_kalman to True."
-                                )
-
-                        # prepare data
-                        dic_to_send = self.prepare_data(data_to_prepare, nb_data_ocp_duration, ratio)
-
-                        if message["get_names"] is True:
-                            dic_to_send["marker_names"] = data_queue_2["marker_names"]
-                            dic_to_send["emg_names"] = data_queue_2["emg_names"]
-
-                        if self.optim is not True:
-                            print("Sending data to client...")
-                        encoded_data = json.dumps(dic_to_send).encode()
-                        connection.send(encoded_data)
-
-                        if self.optim is not True:
-                            print(f"Data of size {sys.getsizeof(dic_to_send)} sent to the client.")
-
-                    except:
-                        pass
-
     def prepare_data(self, data_to_prep, nb_data_ocp_duration, ratio):
         for key in data_to_prep.keys():
             nb_of_data = self.nb_of_data
             if len(data_to_prep[key].shape) == 2:
                 data_to_prep[key] = data_to_prep[key][:, -nb_data_ocp_duration:]
-                # if proc_emg is True or key != "emg":
                 if self.raw_data is not True or key != 'raw_emg':
                     data_to_prep[key] = data_to_prep[key][:, ::ratio]
                 if self.raw_data is True and key == 'raw_emg':
@@ -553,7 +402,6 @@ class Server:
                 raise RuntimeError(
                     f"Length of the mvc list ({self.mvc_list}) " f"not consistent with emg number ({self.nb_electrodes})."
                 )
-            self.emg_empty = np.zeros((len(self.device_info), self.emg_sample))
             self.dev_emg = pytrigno.TrignoEMG(
                 channel_range=self.muscle_range, samples_per_read=self.emg_sample, host=self.host_ip
             )
@@ -561,10 +409,10 @@ class Server:
 
         if self.stream_imu:
             self.imu_sample = int(self.imu_rate / self.system_rate)
-            self.dev_IM = pytrigno.TrignoIM(
+            self.dev_imu = pytrigno.TrignoIM(
                 channel_range=self.muscle_range, samples_per_read=self.imu_sample, host=self.host_ip
             )
-            self.dev_IM.start()
+            self.dev_imu.start()
 
     def _init_vicon_client(self):
         address = "localhost:801"
@@ -630,7 +478,7 @@ class Server:
         return delta, delta_tmp
 
     def emg_processing(self):
-        c=0
+        c = 0
         while True:
             try:
                 emg_data = self.emg_queue_in.get_nowait()
@@ -665,7 +513,7 @@ class Server:
                 self.event_emg.set()
 
     def imu_processing(self):
-        d=0
+        d = 0
         while True:
             try:
                 imu_data = self.imu_queue_in.get_nowait()
@@ -675,9 +523,6 @@ class Server:
 
             if is_working:
                 if self.try_w_connection is not True:
-                    # imu_tmp = np.random.random((self.nb_electrodes, 9, self.imu_sample))
-                    # imu_tmp = self.imu_exp[: self.nb_imu, self.c: self.c + self.imu_sample]
-                    # self.c = self.c + 1 if self.c < self.last_frame * 20 else self.init_frame * 20
                     if d < self.IM_exp.shape[2]:
                         imu_tmp = self.IM_exp[:self.nb_electrodes, :, d: d + self.imu_sample]
                         d += self.imu_sample
@@ -736,6 +581,11 @@ class Server:
         while True:
             try:
                 markers_data = self.kin_queue_in.get_nowait()
+                is_working = True
+            except:
+                is_working = False
+
+            if is_working:
                 markers = markers_data["markers"]
                 states = markers_data["states"]
                 model = self.model
@@ -761,18 +611,14 @@ class Server:
                 )
 
                 if self.recons_kalman is True:
-                    tic = time()
                     states_tmp = self.kalman_func(markers[:, :, -1:], model)
                     if len(states) == 0:
                         states = states_tmp
                     states = (
                         states if states.shape[1] < self.mark_windows else np.append(states[:, 1:], states_tmp, axis=1)
                     )
-                    # print(1/(time()-tic))
                 self.kin_queue_out.put({"states": states, "markers": markers})
                 self.event_kin.set()
-            except:
-                pass
 
     def save_vicon_data(self):
         emg_dec = self.emg_dec
@@ -783,7 +629,6 @@ class Server:
         emg_proc = []
         markers = []
         states = []
-        emg_to_put = []
 
         if self.try_w_connection:
             if self.device == "vicon":
@@ -800,15 +645,16 @@ class Server:
         delta_tmp = 0
         self.iter = 0
         dic_to_put = {}
+        frame = False
         self.initial_time = time()
         while True:
             tic = time()
             if self.try_w_connection:
-                if self.device == "pytrigno":
+                if self.device == "vicon":
                     frame = self.vicon_client.GetFrame()
                     if frame is not True:
                         print("A problem occurred, no frame available.")
-                else:
+                elif self.device == "pytrigno":
                     frame = True
             else:
                 frame = True
@@ -816,10 +662,8 @@ class Server:
             if frame:
                 if self.stream_emg:
                     self.emg_queue_in.put_nowait({"raw_emg": raw_emg, "emg_proc": emg_proc})
-
                 if self.stream_markers:
                     self.kin_queue_in.put_nowait({"states": states, "markers": markers, "model_path": self.model_path})
-
                 if self.stream_imu:
                     self.imu_queue_in.put_nowait({"raw_imu": raw_imu, "imu_proc": imu_proc})
 
@@ -828,8 +672,6 @@ class Server:
                     emg_data = self.emg_queue_out.get_nowait()
                     self.event_emg.clear()
                     raw_emg, emg_proc = emg_data["raw_emg"], emg_data["emg_proc"]
-                    # emg_to_put = emg_proc if self.proc_emg is True else raw_emg
-                    # dic_to_put["emg"] = np.around(emg_to_put, decimals=emg_dec)
                     dic_to_put["emg_names"] = emg_names
                     dic_to_put['raw_emg'] = raw_emg
                     dic_to_put['emg_proc'] = emg_proc
@@ -848,26 +690,16 @@ class Server:
                     imu = self.imu_queue_out.get_nowait()
                     self.event_imu.clear()
                     raw_imu, imu_proc = imu["raw_imu"], imu["imu_proc"]
-                    # imu_to_put = imu_proc if self.proc_imu else raw_imu
                     dic_to_put['raw_imu'] = raw_imu
                     dic_to_put['imu_proc'] = imu_proc
-                    # dic_to_put["imu"] = imu_to_put
 
-            # print(1 / (time() - tic))
-
-            try:
-                self.data.get_nowait()
-            except:
-                pass
-
-            if self.port_2:
+            for i in range(len(self.ports)):
                 try:
-                    self.data_2.get_nowait()
+                    self.server_queue[i].get_nowait()
                 except:
                     pass
-                self.data_2.put_nowait(dic_to_put)
+                self.server_queue[i].put_nowait(dic_to_put)
 
-            self.data.put_nowait(dic_to_put)
             if self.plot_emg:
                 update_plot_emg(raw_emg, p, app, box)
 
@@ -948,10 +780,10 @@ class Server:
         return forceVectorData
 
     def get_emg(self, init=False, output_names=None, emg_names=None):
-        emg = self.emg_empty
         output_names = [] if output_names is None else output_names
         emg_names = [] if emg_names is None else emg_names
         if self.device == "vicon":
+            emg = self.emg_empty
             if init is True:
                 count = 0
                 for output_name, emg_name, unit in self.device_info:
@@ -977,10 +809,10 @@ class Server:
             return emg
 
     def get_imu(self, init=False, output_names=None, imu_names=None):
-        imu = self.imu_empty
         output_names = [] if output_names is None else output_names
         imu_names = [] if imu_names is None else imu_names
         if self.device == "vicon":
+            imu = self.imu_empty
             if init is True:
                 count = 0
                 for output_name, imu_name, unit in self.imu_device_info:
@@ -1005,8 +837,6 @@ class Server:
             imu = self.dev_imu.read()
             return imu
 
-
-
     @staticmethod
     def kalman_func(markers, model):
         markers_over_frames = []
@@ -1028,25 +858,10 @@ class Server:
             q_dot_recons[:, i] = q_dot.to_array()
         return q_recons, q_dot_recons
 
-    def __recv(self, buff=-1, decode=True):
-        buff = buff if buff < 0 else self.buff_size
-        data = self.server.recv(buff).decode() if decode is True else self.server.recv(buff)
-        return data
-
-    def __send(self, data, type=None, IP=None, port=None):
-        data = json.dumps(data).encode() if not isinstance(data, bytes) else data
-        if type == None:
-            return self.server.send(data)
-        elif type == "all":
-            return self.server.sendall(data)
-        elif type == "to":
-            return self.server.sendto(data, address=(IP, port))
-
-
 if __name__ == "__main__":
     # IP_server = '192.168.1.211'
     IP_server = "localhost"
-    port_server = 50000
+    port_server = [50000, 50001]
 
     # server.run(emg=True, markers=True, optim=False, emg_rate=2000, emg_windows=2000, model=biorbd.Model("arm_wt_rot_scap.bioMod"))
     # mvc = Computemvc(5, stream_mode='viconsdk', acquisition_rate=100, frequency=1000, )
@@ -1057,7 +872,7 @@ if __name__ == "__main__":
     # print(mvc, list_mvc)
     server = Server(
         IP=IP_server,
-        port=port_server,
+        server_ports=port_server,
         device="pytrigno",
         type="TCP",
         emg_rate=2000,
@@ -1066,7 +881,7 @@ if __name__ == "__main__":
         recons_kalman=True,
         model_path="arm26_6mark_EKF.bioMod",
         muscle_range=(0, 4),
-        system_rate=70
+        system_rate=100
     )
 
     server.run(
@@ -1075,5 +890,7 @@ if __name__ == "__main__":
         stream_imu=True,
         optim=False,
         plot_emg=False,
+        test_with_connection=False,
+        norm_emg=False
         # mvc_list=list_mvc,
     )

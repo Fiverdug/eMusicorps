@@ -4,8 +4,7 @@ if __name__ == '__main__':
     # IP_server = '192.168.1.211'
     IP_server = "localhost"
     device_ip = '192.168.1.211'
-    port_server = 50000
-    port_server_2 = port_server+1
+    server_port = [50000, 50001]
 
     # Set program variables
     read_freq = 100
@@ -20,8 +19,7 @@ if __name__ == '__main__':
 
     server = Server(
         IP=IP_server,
-        port=port_server,
-        port_2=port_server_2,
+        server_ports=server_port,
         device="pytrigno",
         type="TCP",
         muscle_range=muscles_idx,
