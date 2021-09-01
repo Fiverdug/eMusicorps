@@ -266,9 +266,8 @@ class Server:
                 self.inputs = [self.server]
                 self.outputs = []
                 self.message_queues = {}
-            print(f"TCP server is listening on '{self.address_1}'.") if self.type == "TCP" else print(
-                f"UDP server is listening on '{self.address_1}'."
-            )
+            print(f"{self.type} server is listening on '{self.address_1}'.")
+
         except ConnectionError:
             raise RuntimeError("Unknown error. Server is not listening.")
         print(
@@ -284,7 +283,7 @@ class Server:
                 message = json.loads(connection.recv(self.buff_size))
                 if self.optim is not True:
                     print(f"client sended {message}")
-                data_queue = ()
+                data_queue = {}
 
                 while len(data_queue) == 0:
                     try:
@@ -582,7 +581,6 @@ class Server:
             a = self.vicon_client.GetFrame()
 
         self.subject_name = self.subject_name if self.subject_name else self.vicon_client.GetSubjectNames()[0]
-        self.device_name = self.device_name if self.device_name else self.vicon_client.GetDeviceNames()[2][0]
         system_rate = self.vicon_client.GetFrameRate()
         if system_rate != self.system_rate:
             print(
@@ -592,6 +590,7 @@ class Server:
             self.system_rate = system_rate
 
         if self.stream_emg:
+            self.device_name = self.device_name if self.device_name else self.vicon_client.GetDeviceNames()[2][0]
             self.device_info = self.vicon_client.GetDeviceOutputDetails(self.device_name)
             self.emg_sample = int(self.emg_rate / self.system_rate)
             self.emg_empty = np.zeros((len(self.device_info), self.emg_sample))
@@ -601,6 +600,14 @@ class Server:
                 raise RuntimeError(
                     f"Length of the mvc list ({self.mvc_list}) " f"not consistent with emg number ({self.nb_emg})."
                 )
+
+        if self.stream_imu:
+            self.imu_device_name = self.imu_device_name if self.imu_device_name else self.vicon_client.GetDeviceNames()[3][0]
+            self.imu_device_info = self.vicon_client.GetDeviceOutputDetails(self.imu_device_name)
+            self.imu_sample = int(self.imu_rate / self.system_rate)
+            self.imu_empty = np.zeros((len(self.device_info), 6, self.imu_sample))
+            self.imu_output_names, self.imu_names = self.get_imu(init=True)
+            self.nb_imu = len(self.imu_output_names)
 
         if self.stream_markers:
             self.vicon_client.EnableMarkerData()
@@ -627,6 +634,12 @@ class Server:
         while True:
             try:
                 emg_data = self.emg_queue_in.get_nowait()
+                is_working = True
+            except:
+                is_working = False
+                pass
+
+            if is_working:
                 if self.try_w_connection is not True:
                     if c < self.emg_exp.shape[1]:
                         emg_tmp = self.emg_exp[: self.nb_electrodes, c: c + self.emg_sample]
@@ -650,8 +663,6 @@ class Server:
                 )
                 self.emg_queue_out.put({"raw_emg": raw_emg, "emg_proc": emg_proc})
                 self.event_emg.set()
-            except:
-                pass
 
     def imu_processing(self):
         d=0
@@ -673,7 +684,7 @@ class Server:
                     else:
                         d = 0
                 else:
-                    imu_tmp, imu_names = self.get_imu()
+                    imu_tmp, imu_names = self.get_imu(output_names=self.imu_output_names, imu_names=self.imu_names)
                     imu_tmp = imu_tmp.reshape(self.nb_electrodes, 9, self.imu_sample)
                 accel_tmp = imu_tmp[:, :3, :]
                 gyro_tmp = imu_tmp[:, 3:6, :]
@@ -720,7 +731,6 @@ class Server:
                         (accel_proc, gyro_proc), axis=0)
                 self.imu_queue_out.put({"raw_imu": raw_imu, "imu_proc": imu_proc})
                 self.event_imu.set()
-                # pass
 
     def recons_kin(self):
         while True:
@@ -941,39 +951,61 @@ class Server:
         emg = self.emg_empty
         output_names = [] if output_names is None else output_names
         emg_names = [] if emg_names is None else emg_names
-        if self.try_w_connection:
-            if self.device == "vicon":
-                if init is True:
-                    count = 0
-                    for output_name, emg_name, unit in self.device_info:
-                        emg[count, :], occluded = self.vicon_client.GetDeviceOutputValues(
-                            self.device_name, output_name, emg_name
-                        )
-                        if np.mean(emg[count, -self.emg_sample :]) != 0:
-                            output_names.append(output_name)
-                            emg_names.append(emg_name)
-                        count += 1
-                else:
-                    for i in range(len(output_names)):
-                        emg[i, :], occluded = self.vicon_client.GetDeviceOutputValues(
-                            self.device_name, output_names[i], emg_names[i]
-                        )
+        if self.device == "vicon":
+            if init is True:
+                count = 0
+                for output_name, emg_name, unit in self.device_info:
+                    emg[count, :], occluded = self.vicon_client.GetDeviceOutputValues(
+                        self.device_name, output_name, emg_name
+                    )
+                    if np.mean(emg[count, -self.emg_sample :]) != 0:
+                        output_names.append(output_name)
+                        emg_names.append(emg_name)
+                    count += 1
             else:
-                emg = self.dev_emg.read()
+                for i in range(len(output_names)):
+                    emg[i, :], occluded = self.vicon_client.GetDeviceOutputValues(
+                        self.device_name, output_names[i], emg_names[i]
+                    )
+            if init is True:
+                return output_names, emg_names
+            else:
+                return emg, emg_names
 
-        if init is True:
-            return output_names, emg_names
         else:
-            return emg, emg_names
+            emg = self.dev_emg.read()
+            return emg
 
-    def get_imu(self):
-        if self.try_w_connection:
-            if self.device == "vicon":
-                raise RuntimeError("IMU data not implemented yet with vicon")
+    def get_imu(self, init=False, output_names=None, imu_names=None):
+        imu = self.imu_empty
+        output_names = [] if output_names is None else output_names
+        imu_names = [] if imu_names is None else imu_names
+        if self.device == "vicon":
+            if init is True:
+                count = 0
+                for output_name, imu_name, unit in self.imu_device_info:
+                    imu[count, :, :], occluded = self.vicon_client.GetDeviceOutputValues(
+                        self.imu_device_name, output_name, imu_name
+                    )
+                    if np.mean(imu[count, :, -self.imu_sample:]) != 0:
+                        output_names.append(output_name)
+                        imu_names.append(imu_name)
+                    count += 1
             else:
-                imu = self.dev_imu.read()
+                for i in range(len(output_names)):
+                    imu[i, :, :], occluded = self.vicon_client.GetDeviceOutputValues(
+                        self.imu_device_name, output_names[i], imu_names[i]
+                    )
+            if init is True:
+                return output_names, imu_names
+            else:
+                return imu, imu_names
 
-        return imu
+        else:
+            imu = self.dev_imu.read()
+            return imu
+
+
 
     @staticmethod
     def kalman_func(markers, model):

@@ -29,8 +29,8 @@ if __name__ == '__main__':
     get_gyro = True
     get_emg = True
     print_data = True
-    OSC_ip = "127.0.0.1",
-    OSC_port = 51337,
+    OSC_ip = "127.0.0.1"
+    OSC_port = 51337
     OSC_stream = False
     if OSC_stream is True:
         from pythonosc.udp_client import SimpleUDPClient
