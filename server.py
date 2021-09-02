@@ -132,8 +132,8 @@ class Server:
         self.imu_range = (self.muscle_range[0], self.muscle_range[0] + (self.nb_electrodes * 9))
         self.output_names = ()
         self.imu_output_names = ()
-        self.emg_names = ()
-        self.imu_names = ()
+        self.emg_names = None
+        self.imu_names = None
 
         # Multiprocess stuff
         manager = mp.Manager()
@@ -149,6 +149,7 @@ class Server:
         self.event_emg = mp.Event()
         self.event_kin = mp.Event()
         self.event_imu = mp.Event()
+        self.event_vicon = mp.Event()
         self.process = mp.Process
         self.servers = []
         self.count_server = 0
@@ -259,7 +260,9 @@ class Server:
         #         self._init_vicon_client()
         #     else:
         #         self._init_pytrigno()
-        self._init_pytrigno()
+        if self.try_w_connection:
+            if self.device == "pytrigno":
+                self._init_pytrigno()
         open_server = []
         save_data = self.process(name="vicon", target=Server.save_vicon_data, args=(self,))
         save_data.start()
@@ -457,11 +460,11 @@ class Server:
             self.device_info = self.vicon_client.GetDeviceOutputDetails(self.device_name)
             self.emg_sample = int(self.emg_rate / self.system_rate)
             self.emg_empty = np.zeros((len(self.device_info), self.emg_sample))
-            self.output_names, self.emg_names = self.get_emg(init=True)
-            self.nb_emg = len(self.output_names)
-            if self.norm_emg is True and len(self.mvc_list) != self.nb_emg:
+            # self.output_names, self.emg_names = self.get_emg(init=True)
+            # self.nb_emg = len(self.output_names)
+            if self.norm_emg is True and len(self.mvc_list) != self.nb_electrodes:
                 raise RuntimeError(
-                    f"Length of the mvc list ({self.mvc_list}) " f"not consistent with emg number ({self.nb_emg})."
+                    f"Length of the mvc list ({self.mvc_list}) " f"not consistent with emg number ({self.nb_electrodes})."
                 )
 
         if self.stream_imu:
@@ -469,8 +472,8 @@ class Server:
             self.imu_device_info = self.vicon_client.GetDeviceOutputDetails(self.imu_device_name)
             self.imu_sample = int(self.imu_rate / self.system_rate)
             self.imu_empty = np.zeros((144, self.imu_sample))
-            self.imu_output_names, self.imu_names = self.get_imu(init=True)
-            self.nb_imu = len(self.imu_output_names)
+            # self.imu_output_names, self.imu_names = self.get_imu(init=True)
+            # self.nb_imu = len(self.imu_output_names)
 
         if self.stream_markers:
             self.subject_name = self.subject_name if self.subject_name else self.vicon_client.GetSubjectNames()[0]
@@ -494,6 +497,7 @@ class Server:
         return delta, delta_tmp
 
     def emg_processing(self):
+        self.event_vicon.wait()
         c = 0
         while True:
             try:
@@ -511,7 +515,7 @@ class Server:
                     else:
                         c = 0
                 else:
-                    emg_tmp, emg_names = self.get_emg(output_names=self.output_names, emg_names=self.emg_names)
+                    emg_tmp = emg_data["emg_tmp"]
                 ma_win = 200
                 raw_emg, emg_proc = emg_data["raw_emg"], emg_data["emg_proc"]
                 raw_emg, emg_proc = process_emg_rt(
@@ -529,6 +533,7 @@ class Server:
                 self.event_emg.set()
 
     def imu_processing(self):
+        self.event_vicon.wait()
         d = 0
         while True:
             try:
@@ -545,7 +550,8 @@ class Server:
                     else:
                         d = 0
                 else:
-                    imu_tmp, imu_names = self.get_imu(output_names=self.imu_output_names, imu_names=self.imu_names)
+                    imu_tmp = imu_data["imu_tmp"]
+
                 accel_tmp = imu_tmp[:, :3, :]
                 gyro_tmp = imu_tmp[:, 3:6, :]
                 raw_imu, imu_proc = imu_data["raw_imu"], imu_data["imu_proc"]
@@ -593,6 +599,7 @@ class Server:
                 self.event_imu.set()
 
     def recons_kin(self):
+        self.event_vicon.wait()
         while True:
             try:
                 markers_data = self.kin_queue_in.get_nowait()
@@ -648,9 +655,7 @@ class Server:
         if self.try_w_connection:
             if self.device == "vicon":
                 self._init_vicon_client()
-            else:
-                self._init_pytrigno()
-
+                self.event_vicon.set()
         emg_names = []
         self.nb_marks = len(self.marker_names)
 
@@ -676,11 +681,19 @@ class Server:
 
             if frame:
                 if self.stream_emg:
-                    self.emg_queue_in.put_nowait({"raw_emg": raw_emg, "emg_proc": emg_proc})
+                    emg_tmp, emg_names = self.get_emg(emg_names=self.emg_names)
+                    self.emg_queue_in.put_nowait({"raw_emg": raw_emg, "emg_proc": emg_proc, "emg_tmp": emg_tmp})
                 if self.stream_markers:
-                    self.kin_queue_in.put_nowait({"states": states, "markers": markers, "model_path": self.model_path})
+                    markers_tmp, self.marker_names, occluded = self.get_markers()
+                    if self.iter > 0:
+                        for i in range(markers_tmp.shape[1]):
+                            if occluded[i] is True:
+                                markers_tmp[:, i, :] = markers[:, i, -1:]
+                    self.kin_queue_in.put_nowait({"states": states, "markers": markers, "model_path": self.model_path,
+                                                  "markers_tmp": markers_tmp})
                 if self.stream_imu:
-                    self.imu_queue_in.put_nowait({"raw_imu": raw_imu, "imu_proc": imu_proc})
+                    imu_tmp, imu_names = self.get_imu(imu_names=self.imu_names)
+                    self.imu_queue_in.put_nowait({"raw_imu": raw_imu, "imu_proc": imu_proc, "imu_tmp": imu_tmp})
 
                 if self.stream_emg:
                     self.event_emg.wait()
@@ -705,6 +718,7 @@ class Server:
                     imu = self.imu_queue_out.get_nowait()
                     self.event_imu.clear()
                     raw_imu, imu_proc = imu["raw_imu"], imu["imu_proc"]
+                    dic_to_put["imu_names"] = imu_names
                     dic_to_put['raw_imu'] = raw_imu
                     dic_to_put['imu_proc'] = imu_proc
 
@@ -794,68 +808,81 @@ class Server:
                 print("Failed getting analog channel voltages")
         return forceVectorData
 
-    def get_emg(self, init=False, output_names=None, emg_names=None):
-        output_names = [] if output_names is None else output_names
-        emg_names = [] if emg_names is None else emg_names
+    def get_emg(self, emg_names=None):# init=False, output_names=None, emg_names=None):
+        # output_names = [] if output_names is None else output_names
+        names = [] if emg_names is None else emg_names
         if self.device == "vicon":
-            emg =  np.zeros((16, self.emg_sample))
-            if init is True:
-                count = 0
-                for output_name, emg_name, unit in self.device_info:
-                    emg[count, :], occluded = self.vicon_client.GetDeviceOutputValues(
-                        self.device_name, output_name, emg_name
-                    )
-                    if np.mean(emg[count, -self.emg_sample :]) != 0:
-                        output_names.append(output_name)
-                        emg_names.append(emg_name)
-                    count += 1
-            else:
-                for i in range(len(output_names)):
-                    emg[i, :], occluded = self.vicon_client.GetDeviceOutputValues(
-                        self.device_name, output_names[i], emg_names[i]
-                    )
-            emg = emg[:len(output_names), :]
+            emg = np.zeros((16, self.emg_sample))
+            # if init is True:
+            #     count = 0
+            #     for output_name, emg_name, unit in self.device_info:
+            #         emg[count, :], occluded = self.vicon_client.GetDeviceOutputValues(
+            #             self.device_name, output_name, emg_name
+            #         )
+            #         if np.mean(emg[count, -self.emg_sample :]) != 0:
+            #             output_names.append(output_name)
+            #             emg_names.append(emg_name)
+            #         count += 1
+            # else:
+            #     for i in range(len(output_names)):
+            #         emg[i, :], occluded = self.vicon_client.GetDeviceOutputValues(
+            #             self.device_name, output_names[i], emg_names[i]
+            #         )
+            count = 0
+            for output_name, emg_name, unit in self.device_info:
+                emg[count, :], occluded = self.vicon_client.GetDeviceOutputValues(
+                    self.device_name, output_name, emg_name
+                )
+                if emg_names is None:
+                    names.append(emg_name)
+                count += 1
+            emg = emg[:self.nb_electrodes, :]
         else:
             emg = self.dev_emg.read()
 
-        if init is True:
-            return output_names, emg_names
-        else:
-            return emg, emg_names
+        # if init is True:
+        #     return output_names, emg_names
+        # else:
+        return emg, names
 
-    def get_imu(self, init=False, output_names=None, imu_names=None):
-        output_names = [] if output_names is None else output_names
-        imu_names = [] if imu_names is None else imu_names
+    def get_imu(self, imu_names=None): #, init=False, output_names=None, imu_names=None):
+        # output_names = [] if output_names is None else output_names
+        names = [] if imu_names is None else imu_names
         if self.device == "vicon":
             imu = np.zeros((144, self.imu_sample))
-            if init is True:
-                count = 0
-                for output_name, imu_name, unit in self.imu_device_info:
-                    imu_tmp, occluded = self.vicon_client.GetDeviceOutputValues(
-                        self.imu_device_name, output_name, imu_name
-                    )
-                    imu[count, :] = imu_tmp[-self.imu_sample:]
-                    if np.mean(imu[count, :, -self.imu_sample:]) != 0:
-                        output_names.append(output_name)
-                        imu_names.append(imu_name)
-                    count += 1
-            else:
-                for i in range(len(output_names)):
-                    imu_tmp, occluded = self.vicon_client.GetDeviceOutputValues(
-                        self.imu_device_name, output_names[i], imu_names[i]
-                    )
-                    imu[i, :] = imu_tmp[-self.imu_sample:]
-            n_sensors = int(len(output_names) / 6)
-            imu = imu[:len(output_names) + 3 * n_sensors, :]
-            imu = imu.reshape(n_sensors, 9, self.imu_sample)
+            # if init is True:
+            #     count = 0
+            #     for output_name, imu_name, unit in self.imu_device_info:
+            #         imu_tmp, occluded = self.vicon_client.GetDeviceOutputValues(
+            #             self.imu_device_name, output_name, imu_name
+            #         )
+            #         imu[count, :] = imu_tmp[-self.imu_sample:]
+            #         if np.mean(imu[count, :, -self.imu_sample:]) != 0:
+            #             output_names.append(output_name)
+            #             imu_names.append(imu_name)
+            #         count += 1
+            # else:
+            count = 0
+            for output_name, imu_name, unit in self.imu_device_info:
+                imu_tmp, occluded = self.vicon_client.GetDeviceOutputValues(
+                    self.imu_device_name, output_name, imu_name
+                )
+                if imu_names is None:
+                    names.append(imu_name)
+            # for i in range(self.nb_electrodes):
+            #     imu_tmp, occluded = self.vicon_client.GetDeviceOutputValues(
+            #         self.imu_device_name, output_names[i], imu_names[i]
+            #     )
+                imu[count, :] = imu_tmp[-self.imu_sample:]
+                count += 1
+
+            imu = imu[:self.nb_electrodes * 9, :]
+            imu = imu.reshape(self.nb_electrodes, 9, self.imu_sample)
         else:
             imu = self.dev_imu.read()
             imu = imu.reshape(self.nb_electrodes, 9, self.imu_sample)
 
-        if init is True:
-            return output_names, imu_names
-        else:
-            return imu, imu_names
+        return imu, names
 
     @staticmethod
     def kalman_func(markers, model):
