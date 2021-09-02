@@ -82,7 +82,7 @@ def process_IMU(
             else:
                 average = np.linalg.norm(average, axis=1)
 
-        if average.shape == 3:
+        if len(average.shape) == 3:
             if norm_min_bound or norm_max_bound:
                 for i in range(raw_IM.shape[0]):
                     for j in range(raw_IM.shape[1]):

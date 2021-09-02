@@ -8,7 +8,7 @@ if __name__ == '__main__':
 
     # Set program variables
     read_freq = 100
-    n_electrode = 5
+    n_electrode = 2
 
     # Set file to save data
     output_file = "stream_data_xxx"
@@ -20,7 +20,7 @@ if __name__ == '__main__':
     server = Server(
         IP=IP_server,
         server_ports=server_port,
-        device="pytrigno",
+        device="vicon",
         type="TCP",
         muscle_range=muscles_idx,
         host_pytrigno=device_ip,
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     )
 
     server.run(
-        stream_emg=True,
+        stream_emg=False,
         stream_markers=False,
         stream_imu=True,
         norm_max_accel_value=1,
@@ -40,5 +40,5 @@ if __name__ == '__main__':
         optim=True,
         plot_emg=False,
         norm_emg=False,
-        test_with_connection=False
+        test_with_connection=True
     )

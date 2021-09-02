@@ -11,13 +11,15 @@ import os
 
 try:
     import biorbd
+    biorbd_pack = True
 except ModuleNotFoundError:
-    pass
+    biorbd_pack = False
 
 try:
-    import biorbd_casadi as biord
+    import biorbd_casadi as biorbd
+    biorbd_pack = True
 except ModuleNotFoundError:
-    pass
+    biorbd_pack = False
 
 import json
 
@@ -87,7 +89,7 @@ class Server:
         self.save_data = save_data
         self.raw_data = False
         self.try_w_connection = True
-        if device == "vicon":
+        if biorbd_pack:
             self.model = biorbd.Model(self.model_path)
         else:
             self.model = ()
@@ -127,6 +129,10 @@ class Server:
         self.emg_sample = 0
         self.imu_sample = 0
         self.muscle_range = muscle_range if muscle_range else (0, 15)
+        self.output_names = ()
+        self.imu_output_names = ()
+        self.emg_names = ()
+        self.imu_names = ()
 
         # Multiprocess stuff
         self.manager = mp.Manager()
@@ -244,6 +250,12 @@ class Server:
 
             except ConnectionError:
                 raise RuntimeError("Unknown error. Server is not listening.")
+
+        if self.try_w_connection:
+            if self.device == "vicon":
+                self._init_vicon_client()
+            else:
+                self._init_pytrigno()
 
         open_server = []
         save_data = self.process(name="vicon", target=Server.save_vicon_data, args=(self,))
@@ -396,7 +408,7 @@ class Server:
         return data_to_prep
 
     def _init_pytrigno(self):
-        if self.stream_emg is True:
+        if self.stream_emg:
             self.emg_sample = int(self.emg_rate / self.system_rate)
             if self.norm_emg is True and len(self.mvc_list) != self.nb_electrodes:
                 raise RuntimeError(
@@ -630,11 +642,11 @@ class Server:
         markers = []
         states = []
 
-        if self.try_w_connection:
-            if self.device == "vicon":
-                self._init_vicon_client()
-            else:
-                self._init_pytrigno()
+        # if self.try_w_connection:
+        #     if self.device == "vicon":
+        #         self._init_vicon_client()
+        #     else:
+        #         self._init_pytrigno()
 
         emg_names = []
         self.nb_marks = len(self.marker_names)
@@ -799,14 +811,13 @@ class Server:
                     emg[i, :], occluded = self.vicon_client.GetDeviceOutputValues(
                         self.device_name, output_names[i], emg_names[i]
                     )
-            if init is True:
-                return output_names, emg_names
-            else:
-                return emg, emg_names
-
         else:
             emg = self.dev_emg.read()
-            return emg
+
+        if init is True:
+            return output_names, emg_names
+        else:
+            return emg, emg_names
 
     def get_imu(self, init=False, output_names=None, imu_names=None):
         output_names = [] if output_names is None else output_names
@@ -828,14 +839,13 @@ class Server:
                     imu[i, :, :], occluded = self.vicon_client.GetDeviceOutputValues(
                         self.imu_device_name, output_names[i], imu_names[i]
                     )
-            if init is True:
-                return output_names, imu_names
-            else:
-                return imu, imu_names
-
         else:
             imu = self.dev_imu.read()
-            return imu
+
+        if init is True:
+            return output_names, imu_names
+        else:
+            return imu, imu_names
 
     @staticmethod
     def kalman_func(markers, model):
