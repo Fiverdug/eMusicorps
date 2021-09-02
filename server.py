@@ -129,22 +129,23 @@ class Server:
         self.emg_sample = 0
         self.imu_sample = 0
         self.muscle_range = muscle_range if muscle_range else (0, 15)
+        self.imu_range = (self.muscle_range[0], self.muscle_range[0] + (self.nb_electrodes * 9))
         self.output_names = ()
         self.imu_output_names = ()
         self.emg_names = ()
         self.imu_names = ()
 
         # Multiprocess stuff
-        self.manager = mp.Manager()
+        manager = mp.Manager()
         self.server_queue = []
         for i in range(len(self.ports)):
-            self.server_queue.append(self.manager.Queue())
-        self.emg_queue_in = self.manager.Queue()
-        self.emg_queue_out = self.manager.Queue()
-        self.imu_queue_in = self.manager.Queue()
-        self.imu_queue_out = self.manager.Queue()
-        self.kin_queue_in = self.manager.Queue()
-        self.kin_queue_out = self.manager.Queue()
+            self.server_queue.append(manager.Queue())
+        self.emg_queue_in = manager.Queue()
+        self.emg_queue_out = manager.Queue()
+        self.imu_queue_in = manager.Queue()
+        self.imu_queue_out = manager.Queue()
+        self.kin_queue_in = manager.Queue()
+        self.kin_queue_out = manager.Queue()
         self.event_emg = mp.Event()
         self.event_kin = mp.Event()
         self.event_imu = mp.Event()
@@ -178,10 +179,12 @@ class Server:
         norm_max_gyro_value=None,
         subject_name=None,
         emg_device_name=None,
+        imu_device_name=None,
         test_with_connection=True
     ):
 
         self.device_name = emg_device_name
+        self.imu_device_name = imu_device_name
         self.plot_emg = plot_emg
         self.mvc_list = mvc_list
         self.norm_emg = norm_emg
@@ -251,12 +254,12 @@ class Server:
             except ConnectionError:
                 raise RuntimeError("Unknown error. Server is not listening.")
 
-        if self.try_w_connection:
-            if self.device == "vicon":
-                self._init_vicon_client()
-            else:
-                self._init_pytrigno()
-
+        # if self.try_w_connection:
+        #     if self.device == "vicon":
+        #         self._init_vicon_client()
+        #     else:
+        #         self._init_pytrigno()
+        self._init_pytrigno()
         open_server = []
         save_data = self.process(name="vicon", target=Server.save_vicon_data, args=(self,))
         save_data.start()
@@ -421,8 +424,9 @@ class Server:
 
         if self.stream_imu:
             self.imu_sample = int(self.imu_rate / self.system_rate)
+
             self.dev_imu = pytrigno.TrignoIM(
-                channel_range=self.muscle_range, samples_per_read=self.imu_sample, host=self.host_ip
+                channel_range=self.imu_range, samples_per_read=self.imu_sample, host=self.host_ip
             )
             self.dev_imu.start()
 
@@ -440,7 +444,6 @@ class Server:
         while a is not True:
             a = self.vicon_client.GetFrame()
 
-        self.subject_name = self.subject_name if self.subject_name else self.vicon_client.GetSubjectNames()[0]
         system_rate = self.vicon_client.GetFrameRate()
         if system_rate != self.system_rate:
             print(
@@ -465,11 +468,12 @@ class Server:
             self.imu_device_name = self.imu_device_name if self.imu_device_name else self.vicon_client.GetDeviceNames()[3][0]
             self.imu_device_info = self.vicon_client.GetDeviceOutputDetails(self.imu_device_name)
             self.imu_sample = int(self.imu_rate / self.system_rate)
-            self.imu_empty = np.zeros((len(self.device_info), 6, self.imu_sample))
+            self.imu_empty = np.zeros((144, self.imu_sample))
             self.imu_output_names, self.imu_names = self.get_imu(init=True)
             self.nb_imu = len(self.imu_output_names)
 
         if self.stream_markers:
+            self.subject_name = self.subject_name if self.subject_name else self.vicon_client.GetSubjectNames()[0]
             self.vicon_client.EnableMarkerData()
             self.vicon_client.EnableUnlabeledMarkerData()
             self.vicon_client.EnableMarkerRayData()
@@ -542,7 +546,6 @@ class Server:
                         d = 0
                 else:
                     imu_tmp, imu_names = self.get_imu(output_names=self.imu_output_names, imu_names=self.imu_names)
-                    imu_tmp = imu_tmp.reshape(self.nb_electrodes, 9, self.imu_sample)
                 accel_tmp = imu_tmp[:, :3, :]
                 gyro_tmp = imu_tmp[:, 3:6, :]
                 raw_imu, imu_proc = imu_data["raw_imu"], imu_data["imu_proc"]
@@ -642,11 +645,11 @@ class Server:
         markers = []
         states = []
 
-        # if self.try_w_connection:
-        #     if self.device == "vicon":
-        #         self._init_vicon_client()
-        #     else:
-        #         self._init_pytrigno()
+        if self.try_w_connection:
+            if self.device == "vicon":
+                self._init_vicon_client()
+            else:
+                self._init_pytrigno()
 
         emg_names = []
         self.nb_marks = len(self.marker_names)
@@ -795,7 +798,7 @@ class Server:
         output_names = [] if output_names is None else output_names
         emg_names = [] if emg_names is None else emg_names
         if self.device == "vicon":
-            emg = self.emg_empty
+            emg =  np.zeros((16, self.emg_sample))
             if init is True:
                 count = 0
                 for output_name, emg_name, unit in self.device_info:
@@ -811,6 +814,7 @@ class Server:
                     emg[i, :], occluded = self.vicon_client.GetDeviceOutputValues(
                         self.device_name, output_names[i], emg_names[i]
                     )
+            emg = emg[:len(output_names), :]
         else:
             emg = self.dev_emg.read()
 
@@ -823,24 +827,30 @@ class Server:
         output_names = [] if output_names is None else output_names
         imu_names = [] if imu_names is None else imu_names
         if self.device == "vicon":
-            imu = self.imu_empty
+            imu = np.zeros((144, self.imu_sample))
             if init is True:
                 count = 0
                 for output_name, imu_name, unit in self.imu_device_info:
-                    imu[count, :, :], occluded = self.vicon_client.GetDeviceOutputValues(
+                    imu_tmp, occluded = self.vicon_client.GetDeviceOutputValues(
                         self.imu_device_name, output_name, imu_name
                     )
+                    imu[count, :] = imu_tmp[-self.imu_sample:]
                     if np.mean(imu[count, :, -self.imu_sample:]) != 0:
                         output_names.append(output_name)
                         imu_names.append(imu_name)
                     count += 1
             else:
                 for i in range(len(output_names)):
-                    imu[i, :, :], occluded = self.vicon_client.GetDeviceOutputValues(
+                    imu_tmp, occluded = self.vicon_client.GetDeviceOutputValues(
                         self.imu_device_name, output_names[i], imu_names[i]
                     )
+                    imu[i, :] = imu_tmp[-self.imu_sample:]
+            n_sensors = int(len(output_names) / 6)
+            imu = imu[:len(output_names) + 3 * n_sensors, :]
+            imu = imu.reshape(n_sensors, 9, self.imu_sample)
         else:
             imu = self.dev_imu.read()
+            imu = imu.reshape(self.nb_electrodes, 9, self.imu_sample)
 
         if init is True:
             return output_names, imu_names

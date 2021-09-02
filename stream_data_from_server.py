@@ -6,7 +6,7 @@ from time import time
 if __name__ == '__main__':
     # Set program variables
     read_freq = 100  # Be sure that it's the same than server read frequency
-    n_electrode = 5
+    n_electrode = 2
     show_data = ["raw_emg"]  # can be ["emg"] to show process EMG
     device_host = "192.168.1.211"  # IP address of computer which run trigno device
 

@@ -20,7 +20,7 @@ if __name__ == '__main__':
     server = Server(
         IP=IP_server,
         server_ports=server_port,
-        device="vicon",
+        device="pytrigno",
         type="TCP",
         muscle_range=muscles_idx,
         host_pytrigno=device_ip,
@@ -30,7 +30,7 @@ if __name__ == '__main__':
     )
 
     server.run(
-        stream_emg=False,
+        stream_emg=True,
         stream_markers=False,
         stream_imu=True,
         norm_max_accel_value=1,
