@@ -396,7 +396,11 @@ class Server:
                             print("Sending data to client...")
                             print(f"data sended : {dic_to_send}")
                         encoded_data = json.dumps(dic_to_send).encode()
-                        connection.send(encoded_data)
+
+                        try:
+                            connection.send(encoded_data)
+                        except:
+                            pass
 
                         if self.optim is not True:
                             print(f"Data of size {sys.getsizeof(dic_to_send)} sent to the client.")
