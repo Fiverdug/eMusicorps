@@ -747,6 +747,7 @@ class Server:
 
             if self.iter == 0:
                 initial_time = time()
+                print("Data start streaming")
             self.iter += 1
 
             # Save data
