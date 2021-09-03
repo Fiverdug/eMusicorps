@@ -594,8 +594,6 @@ class Server:
                     squared=True,
                 )
                 if len(accel_proc.shape) == 3:
-                    if raw_accel.shape[2] == 99:
-                        print(1)
                     raw_imu, imu_proc = np.concatenate((raw_accel, raw_gyro), axis=1), np.concatenate((accel_proc, gyro_proc), axis=1)
                 else:
                     raw_imu, imu_proc = np.concatenate((raw_accel, raw_gyro), axis=1), np.concatenate(
