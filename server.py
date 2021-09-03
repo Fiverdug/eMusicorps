@@ -559,7 +559,7 @@ class Server:
                 gyro_tmp = imu_tmp[:, 3:6, :]
                 raw_imu, imu_proc = imu_data["raw_imu"], imu_data["imu_proc"]
                 if len(raw_imu) != 0:
-                    if imu_proc.shape == 3:
+                    if len(imu_proc.shape) == 3:
                         raw_accel, accel_proc = raw_imu[:self.nb_electrodes, :3, :], imu_proc[:self.nb_electrodes, :3, :]
                         raw_gyro, gyro_proc = raw_imu[:self.nb_electrodes, 3:6, :], imu_proc[:self.nb_electrodes, 3:6, :]
                     else:
@@ -593,7 +593,9 @@ class Server:
                     norm_max_bound=self.norm_max_gyro_value,
                     squared=True,
                 )
-                if accel_proc.shape == 3:
+                if len(accel_proc.shape) == 3:
+                    if raw_accel.shape[2] == 99:
+                        print(1)
                     raw_imu, imu_proc = np.concatenate((raw_accel, raw_gyro), axis=1), np.concatenate((accel_proc, gyro_proc), axis=1)
                 else:
                     raw_imu, imu_proc = np.concatenate((raw_accel, raw_gyro), axis=1), np.concatenate(
@@ -657,9 +659,7 @@ class Server:
         if self.try_w_connection:
             if self.device == "vicon":
                 self._init_vicon_client()
-        emg_names = []
         self.nb_marks = len(self.marker_names)
-
         if self.plot_emg:
             p, win_emg, app, box = init_plot_emg(self.nb_electrodes)
         delta = 0
@@ -682,7 +682,11 @@ class Server:
 
             if frame:
                 if self.stream_emg:
-                    emg_tmp, emg_names = self.get_emg(emg_names=self.emg_names)
+                    if self.try_w_connection:
+                        emg_tmp, emg_names = self.get_emg(emg_names=self.emg_names)
+                    else:
+                        emg_tmp = []
+                        emg_names = []
                     self.emg_queue_in.put_nowait({"raw_emg": raw_emg, "emg_proc": emg_proc, "emg_tmp": emg_tmp})
                 if self.stream_markers:
                     markers_tmp, self.marker_names, occluded = self.get_markers()
@@ -693,7 +697,10 @@ class Server:
                     self.kin_queue_in.put_nowait({"states": states, "markers": markers, "model_path": self.model_path,
                                                   "markers_tmp": markers_tmp})
                 if self.stream_imu:
-                    imu_tmp, imu_names = self.get_imu(imu_names=self.imu_names)
+                    if self.try_w_connection:
+                        imu_tmp, imu_names = self.get_imu(imu_names=self.imu_names)
+                    else:
+                        imu_tmp, imu_names = [], []
                     self.imu_queue_in.put_nowait({"raw_imu": raw_imu, "imu_proc": imu_proc, "imu_tmp": imu_tmp})
 
                 if self.stream_emg:
