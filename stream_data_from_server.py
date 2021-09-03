@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
     # Run streaming data
     muscles_idx = (0, n_electrode - 1)
-    host_ip = 'localhost'
+    host_ip = '192.168.1.211'
     host_port = 50000
     get_accel = True
     get_gyro = True
@@ -75,14 +75,50 @@ if __name__ == '__main__':
 
         if OSC_stream is True:
             if get_emg is True:
-                OSC_client.send_message("/EMG/processed/", EMG[:, -1:])
+                # OSC_client.send_message("/EMG/processed/", emg_proc[:, -1:].tolist())
+                float_array = EMG[:, -1:].astype(np.float)
+                OSC_client.send_message("/EMG/processed",
+                                        [float(float_array[0]), float(float_array[1]), float(float_array[2]),
+                                         float(float_array[3]), float(float_array[4])])
+
             if np.array(data['imu']).shape == 3:
                 if get_accel is True:
-                    OSC_client.send_message("/accel/", accel_proc[:, :, -1:])
+                        # OSC_client.send_message("/accel/", accel_proc[:, :, -1:].tolist())
+                        accel_float = accel_proc[:, :, -1:].astype(np.float)
+                        OSC_client.send_message("/accel/0",
+                                                [float(accel_float[0][0]), float(accel_float[0][1]), float(accel_float[0][2])])
+                        OSC_client.send_message("/accel/1",
+                                                [float(accel_float[1][0]), float(accel_float[1][1]), float(accel_float[1][2])])
+                        OSC_client.send_message("/accel/2",
+                                                [float(accel_float[2][0]), float(accel_float[2][1]), float(accel_float[2][2])])
+                        OSC_client.send_message("/accel/3",
+                                                [float(accel_float[3][0]), float(accel_float[3][1]), float(accel_float[3][2])])
+                        OSC_client.send_message("/accel/4",
+                                                [float(accel_float[4][0]), float(accel_float[4][1]), float(accel_float[4][2])])
+
                 if get_gyro is True:
-                    OSC_client.send_message("/gyro/", gyro_proc[:, :, -1:])
+                    # OSC_client.send_message("/gyro/", gyro_proc[:, :, -1:].tolist())
+                    gyro_float = gyro_proc[:, :, -1:].astype(np.float)
+                    OSC_client.send_message("/gyro/0",
+                                            [float(gyro_float[0][0]), float(gyro_float[0][1]), float(gyro_float[0][2])])
+                    OSC_client.send_message("/gyro/1",
+                                            [float(gyro_float[1][0]), float(gyro_float[1][1]), float(gyro_float[1][2])])
+                    OSC_client.send_message("/gyro/2",
+                                            [float(gyro_float[2][0]), float(gyro_float[2][1]), float(gyro_float[2][2])])
+                    OSC_client.send_message("/gyro/3",
+                                            [float(gyro_float[3][0]), float(gyro_float[3][1]), float(gyro_float[3][2])])
+                    OSC_client.send_message("/gyro/4",
+                                            [float(gyro_float[4][0]), float(gyro_float[4][1]), float(gyro_float[4][2])])
             else:
-                if get_accel is True:
-                    OSC_client.send_message("/accel/", accel_proc[:, -1:])
-                if get_gyro is True:
-                    OSC_client.send_message("/gyro/", gyro_proc[:, -1:])
+            # OSC_client.send_message("/accel/processed/", emg_proc[:, -1:].tolist())
+                accel_float = accel_proc[:, -1:].astype(np.float)
+                OSC_client.send_message("/accel/processed",
+                                        [float(accel_float[0]), float(accel_float[1]), float(accel_float[2]),
+                                         float(accel_float[3]), float(accel_float[4])])
+                # OSC_client.send_message("/gyro/processed/", emg_proc[:, -1:].tolist())
+                gyro_float = gyro_proc[:, -1:].astype(np.float)
+                OSC_client.send_message("/gyro/processed",
+                                        [float(gyro_float[0]), float(gyro_float[1]), float(gyro_float[2]),
+                                         float(gyro_float[3]), float(gyro_float[4])])
+
+

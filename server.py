@@ -312,6 +312,7 @@ class Server:
                         is_working = False
                         pass
                     if is_working:
+                        self.system_rate = data_queue["system_rate"]
                         self.Nmhe = message["Nmhe"]
                         self.ocp_freq = message["exp_freq"]
                         self.raw_data = message["raw_data"]
@@ -320,7 +321,10 @@ class Server:
                         self.nb_of_data = (
                             message["nb_of_data"] if message["nb_of_data"] is not None else self.nb_of_data
                         )
-                        ratio = int(self.system_rate / self.ocp_freq)
+                        if self.system_rate < self.ocp_freq:
+                            ratio = 1
+                        else:
+                            ratio = int(self.system_rate / self.ocp_freq)
                         nb_data_ocp_duration = int(ratio * (self.Nmhe + 1))
                         data_to_prepare = {}
 
@@ -388,6 +392,7 @@ class Server:
 
                         if self.optim is not True:
                             print("Sending data to client...")
+                            print(f"data sended : {dic_to_send}")
                         encoded_data = json.dumps(dic_to_send).encode()
                         connection.send(encoded_data)
 
@@ -450,8 +455,8 @@ class Server:
         system_rate = self.vicon_client.GetFrameRate()
         if system_rate != self.system_rate:
             print(
-                "[WARNING] Vicon system rate ({system_rate} Hz) is different than system rate you chosen "
-                "({self.system_rate} Hz). System rate is now set to : {system_rate} Hz."
+                f"[WARNING] Vicon system rate ({system_rate} Hz) is different than system rate you chosen "
+                f"({self.system_rate} Hz). System rate is now set to : {system_rate} Hz."
             )
             self.system_rate = system_rate
 
@@ -497,7 +502,7 @@ class Server:
         return delta, delta_tmp
 
     def emg_processing(self):
-        self.event_vicon.wait()
+        # self.event_vicon.wait()
         c = 0
         while True:
             try:
@@ -533,7 +538,6 @@ class Server:
                 self.event_emg.set()
 
     def imu_processing(self):
-        self.event_vicon.wait()
         d = 0
         while True:
             try:
@@ -551,17 +555,16 @@ class Server:
                         d = 0
                 else:
                     imu_tmp = imu_data["imu_tmp"]
-
                 accel_tmp = imu_tmp[:, :3, :]
                 gyro_tmp = imu_tmp[:, 3:6, :]
                 raw_imu, imu_proc = imu_data["raw_imu"], imu_data["imu_proc"]
                 if len(raw_imu) != 0:
                     if imu_proc.shape == 3:
-                        raw_accel, accel_proc = raw_imu[:, :3, :], imu_proc[:, :3, :]
-                        raw_gyro, gyro_proc = raw_imu[:, 3:6, :], imu_proc[:, 3:6, :]
+                        raw_accel, accel_proc = raw_imu[:self.nb_electrodes, :3, :], imu_proc[:self.nb_electrodes, :3, :]
+                        raw_gyro, gyro_proc = raw_imu[:self.nb_electrodes, 3:6, :], imu_proc[:self.nb_electrodes, 3:6, :]
                     else:
-                        raw_accel, accel_proc = raw_imu[:, :3, :], imu_proc[:self.nb_electrodes, :]
-                        raw_gyro, gyro_proc = raw_imu[:, 3:6, :], imu_proc[self.nb_electrodes:, :]
+                        raw_accel, accel_proc = raw_imu[:self.nb_electrodes, :3, :], imu_proc[:self.nb_electrodes, :]
+                        raw_gyro, gyro_proc = raw_imu[:self.nb_electrodes, 3:6, :], imu_proc[:self.nb_electrodes, :]
                 else:
                     raw_accel, accel_proc = raw_imu, imu_proc
                     raw_gyro, gyro_proc = raw_imu, imu_proc
@@ -590,7 +593,7 @@ class Server:
                     norm_max_bound=self.norm_max_gyro_value,
                     squared=True,
                 )
-                if raw_gyro.shape == 3:
+                if accel_proc.shape == 3:
                     raw_imu, imu_proc = np.concatenate((raw_accel, raw_gyro), axis=1), np.concatenate((accel_proc, gyro_proc), axis=1)
                 else:
                     raw_imu, imu_proc = np.concatenate((raw_accel, raw_gyro), axis=1), np.concatenate(
@@ -599,7 +602,6 @@ class Server:
                 self.event_imu.set()
 
     def recons_kin(self):
-        self.event_vicon.wait()
         while True:
             try:
                 markers_data = self.kin_queue_in.get_nowait()
@@ -655,7 +657,6 @@ class Server:
         if self.try_w_connection:
             if self.device == "vicon":
                 self._init_vicon_client()
-                self.event_vicon.set()
         emg_names = []
         self.nb_marks = len(self.marker_names)
 
@@ -721,6 +722,7 @@ class Server:
                     dic_to_put["imu_names"] = imu_names
                     dic_to_put['raw_imu'] = raw_imu
                     dic_to_put['imu_proc'] = imu_proc
+            dic_to_put['system_rate'] = self.system_rate
 
             for i in range(len(self.ports)):
                 try:
@@ -877,10 +879,10 @@ class Server:
                 count += 1
 
             imu = imu[:self.nb_electrodes * 9, :]
-            imu = imu.reshape(self.nb_electrodes, 9, self.imu_sample)
+            imu = imu.reshape(self.nb_electrodes, 9, -1)
         else:
             imu = self.dev_imu.read()
-            imu = imu.reshape(self.nb_electrodes, 9, self.imu_sample)
+            imu = imu.reshape(self.nb_electrodes, 9, -1)
 
         return imu, names
 

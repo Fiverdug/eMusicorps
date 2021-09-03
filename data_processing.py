@@ -67,9 +67,9 @@ def process_IMU(
 
     elif raw_IM.shape[2] < IM_win:
         if squared is not True:
-            IM_proc = np.zeros((IM_tmp.shape[0], IM_tmp.shape[1], int(raw_IM.shape[2] / IM_sample)))
+            IM_proc = np.zeros((IM_tmp.shape[0], IM_tmp.shape[1], IM_win))
         else:
-            IM_proc = np.zeros((IM_tmp.shape[0], int(raw_IM.shape[2] / IM_sample)))
+            IM_proc = np.zeros((IM_tmp.shape[0], IM_win))
         raw_IM = np.append(raw_IM[:, :, -IM_win + IM_sample :], IM_tmp, axis=2)
 
     else:
@@ -158,7 +158,7 @@ def process_emg_rt(raw_emg, emg_proc, emg_tmp, mvc_list, ma_win, emg_win=2000, e
         raw_emg = emg_tmp
 
     elif raw_emg.shape[1] < emg_win:
-        emg_proc = np.zeros((emg_tmp.shape[0], int(raw_emg.shape[1] / emg_sample)))
+        emg_proc = np.zeros((emg_tmp.shape[0], emg_win))
         raw_emg = np.append(raw_emg, emg_tmp, axis=1)
 
     else:

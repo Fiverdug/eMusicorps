@@ -227,11 +227,20 @@ class ComputeMvc:
                 self.try_name = f"{try_name}"
             try_number += 1
             self.try_list.append(self.try_name)
-            input(
+            t = input(
                 f"Ready to start trial: {self.try_name}, with muscles :{self.muscle_names}. "
-                f"Press enter to begin your MVC."
+                f"Press enter to begin your MVC. or enter a number of seconds"
             )
             nb_frame = 0
+            try:
+                float(t)
+                # if isinstance(t, (int, float)):
+                iter = float(t) * self.acquisition_rate
+                var = iter
+                duration = True
+            except:
+                var = -1
+                duration = False
             c = 0
             if show_data is True:
                 p, win_emg, app, box = init_plot_emg(self.n_muscles, self.muscle_names)
@@ -239,6 +248,7 @@ class ComputeMvc:
             while True:
                 # os.system('cls' if os.name == 'nt' else 'clear')
                 try:
+
                     if nb_frame == 0:
                         print(
                             "Trial is running please press 'Ctrl+C' when trial is terminated "
@@ -290,7 +300,9 @@ class ComputeMvc:
                         sleep(time_to_sleep)
                     else:
                         print(f"Delay of {abs(time_to_sleep)}.")
-
+                    if duration:
+                        if nb_frame == var:
+                            break
                 except KeyboardInterrupt:
                     if show_data is True:
                         app.disconnect()
