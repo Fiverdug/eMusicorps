@@ -2,6 +2,7 @@ import scipy.io as sio
 from client import Client
 import numpy as np
 from time import time
+from pythonosc.udp_client import SimpleUDPClient
 
 if __name__ == '__main__':
     # Set program variables
@@ -33,7 +34,6 @@ if __name__ == '__main__':
     OSC_port = 51337
     OSC_stream = True
     if OSC_stream is True:
-        from pythonosc.udp_client import SimpleUDPClient
         OSC_client = SimpleUDPClient(OSC_ip, OSC_port)
         print("Streaming OSC activated")
 
@@ -128,18 +128,19 @@ if __name__ == '__main__':
                 # OSC_client.send_message("/accel/processed",
                 #                         [float(accel_float[0]), float(accel_float[1]), float(accel_float[2]),
                 #                          float(accel_float[3]), float(accel_float[4])])
-
-                accel_list = accel_proc[:, -1:].reshape(accel_proc.shape[0])
-                accel_list = accel_list.tolist()
-                OSC_client.send_message("/accel/processed", accel_list)
+                if get_accel is True:
+                    accel_list = accel_proc[:, -1:].reshape(accel_proc.shape[0])
+                    accel_list = accel_list.tolist()
+                    OSC_client.send_message("/accel/processed", accel_list)
 
                 # OSC_client.send_message("/gyro/processed/", emg_proc[:, -1:].tolist())
                 # gyro_float = gyro_proc[:, -1:].astype(np.float)
                 # OSC_client.send_message("/gyro/processed",
                 #                         [float(gyro_float[0]), float(gyro_float[1]), float(gyro_float[2]),
                 #                          float(gyro_float[3]), float(gyro_float[4])])
-                gyro_list = gyro_proc[:, -1:].reshape(gyro_proc.shape[0])
-                gyro_list = gyro_list.tolist()
-                OSC_client.send_message("/gyro/processed", gyro_list)
+                if get_gyro is True:
+                    gyro_list = gyro_proc[:, -1:].reshape(gyro_proc.shape[0])
+                    gyro_list = gyro_list.tolist()
+                    OSC_client.send_message("/gyro/processed", gyro_list)
 
 

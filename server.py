@@ -8,20 +8,22 @@ from data_plot import init_plot_emg, update_plot_emg
 from data_processing import process_emg_rt, process_IMU, add_data_to_pickle
 import multiprocessing as mp
 import os
+import json
 
 try:
     import biorbd
-    biorbd_pack = True
+    biorbd_eigen = True
 except ModuleNotFoundError:
-    biorbd_pack = False
+    biorbd_eigen = False
 
 try:
     import biorbd_casadi as biorbd
-    biorbd_pack = True
+    biorbd_cas = True
 except ModuleNotFoundError:
-    biorbd_pack = False
+    biorbd_cas = False
 
-import json
+# biorbd_pack = True if biorbd_cas or biorbd_eigen else False
+biorbd_pack = False
 
 try:
     from vicon_dssdk import ViconDataStream as VDS
@@ -739,13 +741,14 @@ class Server:
             if self.plot_emg:
                 update_plot_emg(raw_emg, p, app, box)
 
-            delta, delta_tmp = self._loop_sleep(delta_tmp, delta, tic)
+            if self.iter == 0:
+                initial_time = time()
             self.iter += 1
 
             # Save data
             if self.save_data is True:
                 data_to_save = {
-                    "Time": time() - self.initial_time,
+                    "Time": time() - initial_time,
                     "emg_freq": self.emg_rate,
                     "IM_freq": self.imu_rate,
                     "read_freq": self.system_rate,
@@ -767,6 +770,7 @@ class Server:
                         data_to_save["raw_gyro"] = raw_imu[:, 3:6, -self.imu_sample:]
 
                 add_data_to_pickle(data_to_save, self.data_path)
+            delta, delta_tmp = self._loop_sleep(delta_tmp, delta, tic)
 
     @staticmethod
     def init_kalman(model):
