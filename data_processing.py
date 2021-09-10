@@ -70,7 +70,7 @@ def process_IMU(
             IM_proc = np.zeros((IM_tmp.shape[0], IM_tmp.shape[1], IM_win))
         else:
             IM_proc = np.zeros((IM_tmp.shape[0], IM_win))
-        raw_IM = np.append(raw_IM[:, :, -IM_win + IM_sample :], IM_tmp, axis=2)
+        raw_IM = np.append(raw_IM, IM_tmp, axis=2)
 
     else:
         raw_IM = np.append(raw_IM[:, :, -IM_win + IM_sample :], IM_tmp, axis=2)
