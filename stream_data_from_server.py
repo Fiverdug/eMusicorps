@@ -42,7 +42,7 @@ if __name__ == '__main__':
     if OSC_stream is True:
         OSC_client = SimpleUDPClient(OSC_ip, OSC_port)
         print("Streaming OSC activated")
-
+    count = 0
     while True:
         client = Client(host_ip, host_port, "TCP")
         data = client.get_data(data=["emg", 'imu'],
@@ -152,7 +152,9 @@ if __name__ == '__main__':
                     OSC_client.send_message("/gyro/processed", gyro_list)
 
         if save_data is True:
-            print("Save data starting.")
+            if count == 0:
+                print("Save data starting.")
+                count += 1
             for key in data.keys():
                 if key == 'imu':
                     data[key] = np.array(data[key])
