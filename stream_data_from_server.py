@@ -1,8 +1,10 @@
 import scipy.io as sio
 from client import Client
 import numpy as np
+import os
 from time import time
 from pythonosc.udp_client import SimpleUDPClient
+from data_processing import add_data_to_pickle
 
 if __name__ == '__main__':
     # Set program variables
@@ -33,6 +35,10 @@ if __name__ == '__main__':
     OSC_ip = "127.0.0.1"
     OSC_port = 51337
     OSC_stream = True
+    save_data = True
+    data_path = 'streamed_data'
+    if os.path.isfile(data_path):
+        os.remove(data_path)
     if OSC_stream is True:
         OSC_client = SimpleUDPClient(OSC_ip, OSC_port)
         print("Streaming OSC activated")
@@ -48,6 +54,8 @@ if __name__ == '__main__':
                                mvc_list=list_mvc
                                )
 
+        data['gyro_proc'] = []
+        data['accel_proc'] = []
         EMG = np.array(data['emg'])
         raw_emg = np.array(data['raw_emg'])
 
@@ -142,5 +150,15 @@ if __name__ == '__main__':
                     gyro_list = gyro_proc[:, -1:].reshape(gyro_proc.shape[0])
                     gyro_list = gyro_list.tolist()
                     OSC_client.send_message("/gyro/processed", gyro_list)
+
+        if save_data is True:
+            for key in data.keys():
+                if key == 'imu':
+                    data[key] = np.array(data[key])
+                    data['accel_proc'] = data[key][:n_electrode, :]
+                    data['gyro_proc'] = data[key][n_electrode:, :]
+                else:
+                    data[key] = np.array(data[key])
+            add_data_to_pickle(data, data_path)
 
 
