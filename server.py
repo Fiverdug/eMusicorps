@@ -4,6 +4,7 @@ import sys
 from time import time, sleep, strftime
 import scipy.io as sio
 import numpy as np
+from math import ceil
 from data_plot import init_plot_emg, update_plot_emg
 from data_processing import process_emg_rt, process_IMU, add_data_to_pickle
 import multiprocessing as mp
@@ -469,7 +470,7 @@ class Server:
         if self.stream_emg:
             self.device_name = self.device_name if self.device_name else self.vicon_client.GetDeviceNames()[2][0]
             self.device_info = self.vicon_client.GetDeviceOutputDetails(self.device_name)
-            self.emg_sample = int(self.emg_rate / self.system_rate)
+            self.emg_sample = ceil(self.emg_rate / self.system_rate)
             self.emg_empty = np.zeros((len(self.device_info), self.emg_sample))
             # self.output_names, self.emg_names = self.get_emg(init=True)
             # self.nb_emg = len(self.output_names)
@@ -481,7 +482,7 @@ class Server:
         if self.stream_imu:
             self.imu_device_name = self.imu_device_name if self.imu_device_name else self.vicon_client.GetDeviceNames()[3][0]
             self.imu_device_info = self.vicon_client.GetDeviceOutputDetails(self.imu_device_name)
-            self.imu_sample = int(self.imu_rate / self.system_rate)
+            self.imu_sample = ceil(self.imu_rate / self.system_rate)
             self.imu_empty = np.zeros((144, self.imu_sample))
             # self.imu_output_names, self.imu_names = self.get_imu(init=True)
             # self.nb_imu = len(self.imu_output_names)
@@ -579,7 +580,7 @@ class Server:
                         raw_gyro, gyro_proc = raw_imu[:self.nb_electrodes, 3:6, :], imu_proc[:self.nb_electrodes, 3:6, :]
                     else:
                         raw_accel, accel_proc = raw_imu[:self.nb_electrodes, :3, :], imu_proc[:self.nb_electrodes, :]
-                        raw_gyro, gyro_proc = raw_imu[:self.nb_electrodes, 3:6, :], imu_proc[:self.nb_electrodes, :]
+                        raw_gyro, gyro_proc = raw_imu[:self.nb_electrodes, 3:6, :], imu_proc[self.nb_electrodes:, :]
                 else:
                     raw_accel, accel_proc = raw_imu, imu_proc
                     raw_gyro, gyro_proc = raw_imu, imu_proc
