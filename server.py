@@ -566,7 +566,7 @@ class Server:
                 gyro_tmp = imu_tmp[:, 3:6, :]
                 if self.device == 'vicon':
                     # convert rad/s into deg/s when vicon is used
-                    gyro_tmp = gyro_tmp * np.pi / 180
+                    gyro_tmp = gyro_tmp * (180 / np.pi)
 
                 if self.device == 'pytrigno':
                     # convert data from G into m/s2 when pytrigno is used
