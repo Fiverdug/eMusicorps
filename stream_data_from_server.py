@@ -58,7 +58,7 @@ if __name__ == '__main__':
             raw_gyro = np.array(data['raw_imu'])[:, 3:6, :]
         else:
             accel_proc = np.array(data['imu'])[:n_electrode, :]
-            gyro_proc = np.array(data['imu'])[:n_electrode, :]
+            gyro_proc = np.array(data['imu'])[n_electrode:, :]
             raw_accel = np.array(data['raw_imu'])[:, :3, :]
             raw_gyro = np.array(data['raw_imu'])[:, 3:6, :]
 

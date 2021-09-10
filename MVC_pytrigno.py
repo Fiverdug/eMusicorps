@@ -248,7 +248,6 @@ class ComputeMvc:
             while True:
                 # os.system('cls' if os.name == 'nt' else 'clear')
                 try:
-
                     if nb_frame == 0:
                         print(
                             "Trial is running please press 'Ctrl+C' when trial is terminated "

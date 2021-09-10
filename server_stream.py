@@ -8,7 +8,7 @@ if __name__ == '__main__':
 
     # Set program variables
     read_freq = 100
-    n_electrode = 2
+    n_electrode = 5
 
     # Set file to save data
     output_file = "stream_data_xxx"
@@ -23,7 +23,7 @@ if __name__ == '__main__':
         device="pytrigno",
         type="TCP",
         muscle_range=muscles_idx,
-        host_pytrigno=device_ip,
+        device_host_ip=device_ip,
         system_rate=read_freq,
         output_dir=output_dir,
         output_file=output_file,
@@ -40,5 +40,5 @@ if __name__ == '__main__':
         optim=True,
         plot_emg=False,
         norm_emg=False,
-        test_with_connection=True
+        test_with_connection=False
     )

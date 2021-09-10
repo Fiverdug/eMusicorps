@@ -56,7 +56,7 @@ class Server:
         timeout=-1,
         buff_size=Buff_size,
         device=None,  # 'vicon' or 'pytrigno',
-        host_pytrigno=None,
+        device_host_ip=None,
         muscle_range=None,
         output_file=None,
         output_dir=None,
@@ -96,7 +96,7 @@ class Server:
         else:
             self.model = ()
         self.device = device if device else "pytrigno"
-        self.host_ip = host_pytrigno if host_pytrigno else "localhost"
+        self.device_host_ip = device_host_ip if device_host_ip else "localhost"
 
         current_time = strftime("%Y%m%d-%H%M")
         output_file = output_file if output_file else f"trigno_streaming_{current_time}"
@@ -432,7 +432,7 @@ class Server:
                     f"Length of the mvc list ({self.mvc_list}) " f"not consistent with emg number ({self.nb_electrodes})."
                 )
             self.dev_emg = pytrigno.TrignoEMG(
-                channel_range=self.muscle_range, samples_per_read=self.emg_sample, host=self.host_ip
+                channel_range=self.muscle_range, samples_per_read=self.emg_sample, host=self.device_host_ip
             )
             self.dev_emg.start()
 
@@ -440,12 +440,12 @@ class Server:
             self.imu_sample = int(self.imu_rate / self.system_rate)
 
             self.dev_imu = pytrigno.TrignoIM(
-                channel_range=self.imu_range, samples_per_read=self.imu_sample, host=self.host_ip
+                channel_range=self.imu_range, samples_per_read=self.imu_sample, host=self.device_host_ip
             )
             self.dev_imu.start()
 
     def _init_vicon_client(self):
-        address = "localhost:801"
+        address = f"{self.device_host_ip}:801"
         print(f"Connection to ViconDataStreamSDK at : {address} ...")
         self.vicon_client = VDS.Client()
         self.vicon_client.Connect(address)
@@ -561,8 +561,17 @@ class Server:
                         d = 0
                 else:
                     imu_tmp = imu_data["imu_tmp"]
+
                 accel_tmp = imu_tmp[:, :3, :]
                 gyro_tmp = imu_tmp[:, 3:6, :]
+                if self.device == 'vicon':
+                    # convert rad/s into deg/s when vicon is used
+                    gyro_tmp = gyro_tmp * np.pi / 180
+
+                if self.device == 'pytrigno':
+                    # convert data from G into m/s2 when pytrigno is used
+                    accel_tmp = accel_tmp * 9.81
+
                 raw_imu, imu_proc = imu_data["raw_imu"], imu_data["imu_proc"]
                 if len(raw_imu) != 0:
                     if len(imu_proc.shape) == 3:
@@ -594,7 +603,6 @@ class Server:
                     self.imu_windows,
                     self.imu_sample,
                     ma_win=30,
-                    accel=True,
                     norm_min_bound=self.norm_min_gyro_value,
                     norm_max_bound=self.norm_max_gyro_value,
                     squared=True,
@@ -921,39 +929,3 @@ class Server:
             q_dot_recons[:, i] = q_dot.to_array()
         return q_recons, q_dot_recons
 
-if __name__ == "__main__":
-    # IP_server = '192.168.1.211'
-    IP_server = "localhost"
-    port_server = [50000, 50001]
-
-    # server.run(emg=True, markers=True, optim=False, emg_rate=2000, emg_windows=2000, model=biorbd.Model("arm_wt_rot_scap.bioMod"))
-    # mvc = Computemvc(5, stream_mode='viconsdk', acquisition_rate=100, frequency=1000, )
-    # mvc = mvc.run(device_name="emg", show_data=False)
-    # # mvc = sio.loadmat("mvc_20210510-2346.mat")["mvc_list_max"]
-    # list_mvc = mvc[0].tolist()
-    list_mvc = [0.00043835, 0.00023503]
-    # print(mvc, list_mvc)
-    server = Server(
-        IP=IP_server,
-        server_ports=port_server,
-        device="pytrigno",
-        type="TCP",
-        emg_rate=2000,
-        emg_windows=2000,
-        proc_emg=True,
-        recons_kalman=True,
-        model_path="arm26_6mark_EKF.bioMod",
-        muscle_range=(0, 4),
-        system_rate=100
-    )
-
-    server.run(
-        stream_emg=True,
-        stream_markers=False,
-        stream_imu=True,
-        optim=False,
-        plot_emg=False,
-        test_with_connection=False,
-        norm_emg=False
-        # mvc_list=list_mvc,
-    )
