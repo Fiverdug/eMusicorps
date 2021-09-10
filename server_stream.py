@@ -20,7 +20,7 @@ if __name__ == '__main__':
     server = Server(
         IP=IP_server,
         server_ports=server_port,
-        device="pytrigno",
+        device="vicon",
         type="TCP",
         muscle_range=muscles_idx,
         device_host_ip=device_ip,
@@ -33,12 +33,8 @@ if __name__ == '__main__':
         stream_emg=True,
         stream_markers=False,
         stream_imu=True,
-        norm_max_accel_value=1,
-        norm_min_accel_value=-1,
-        norm_min_gyro_value=-500,
-        norm_max_gyro_value=500,
         optim=True,
         plot_emg=False,
         norm_emg=False,
-        test_with_connection=False
+        test_with_connection=True
     )
