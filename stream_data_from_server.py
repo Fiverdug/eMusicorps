@@ -152,6 +152,7 @@ if __name__ == '__main__':
                     OSC_client.send_message("/gyro/processed", gyro_list)
 
         if save_data is True:
+            print("Save data starting.")
             for key in data.keys():
                 if key == 'imu':
                     data[key] = np.array(data[key])
