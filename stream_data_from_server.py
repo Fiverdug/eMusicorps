@@ -2,7 +2,6 @@ import scipy.io as sio
 from client import Client
 import numpy as np
 import os
-from time import time
 from pythonosc.udp_client import SimpleUDPClient
 from data_processing import add_data_to_pickle
 
@@ -33,10 +32,10 @@ if __name__ == '__main__':
     get_accel = True
     get_gyro = True
     get_emg = True
-    print_data = True
+    print_data = False
     OSC_ip = "127.0.0.1"
     OSC_port = 51337
-    OSC_stream = False
+    OSC_stream = True
     save_data = True
     data_path = 'streamed_data'
     if os.path.isfile(data_path):
@@ -44,10 +43,10 @@ if __name__ == '__main__':
     if OSC_stream is True:
         OSC_client = SimpleUDPClient(OSC_ip, OSC_port)
         print("Streaming OSC activated")
+
     count = 0
     pianist = input("Please choose a pianist (1 or 2), then press enter.")
     pianist = int(pianist)
-    muscles_idx = slice(muscles_idx_pianist[pianist - 1][0], muscles_idx_pianist[pianist - 1][-1])
     initial_electrode = 0 if pianist == 1 else n_elec_pianist_1
     final_electrode = n_elec_pianist_1 if pianist == 1 else n_elec_pianist_1 + n_elec_pianist_2
     while True:
